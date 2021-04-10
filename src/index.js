@@ -458,6 +458,9 @@ module.exports = {
   isBase, isSpecial, specials,
   ord, upto, goto, preResolve, resolve, force,
   normalise, normalize:normalise,
-  percentEncode, print,
-  modes, modeFor, parseAuth, parse,
+  percentEncode,
+  modes, modeFor, parse, parseAuth, parseHost,
+  print,
 }
+
+console.log (module.exports)
