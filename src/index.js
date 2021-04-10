@@ -11,21 +11,29 @@ const { setPrototypeOf:setProto, assign } = Object
 
 const tags = { 
   scheme:1,
-  user:2.1, pass:2.2,
-  host:2.6, port:2.7,
-  auth:3, drive:4,
-  root:5, dirs:6, file:7,
-  query:8, hash: 9
+  user:2, pass:2,
+  host:2, port:2,
+  drive:3,
+  root:4, dirs:5, file:6,
+  query:7, hash:8
 }
 
-const specials =
-  { http:1, https:2, ws:3, wss:4, ftp:5, file:6 }
+const modes =
+  { generic:0, web:1, file:2, special:3 }
 
-const isSpecial = ({ scheme }) =>
-  scheme == null || low (scheme) in specials // default to true on no scheme
+const specials =
+  { http:1, https:1, ws:1, wss:1, ftp:1, file:2 }
+
+const modeFor = ({ scheme }) =>
+  specials [low (scheme)] || modes.generic
 
 const isBase = ({ scheme, host, root }) =>
   scheme != null && (host != null || root != null)
+
+const isResolved = url => {
+  const o = ord (r)
+  return o === tags.scheme || o === tags.hash && r.hash != null
+}
 
 const low = str =>
   str ? str.toLowerCase () : str
@@ -36,7 +44,7 @@ const low = str =>
 
 const ord = url => {
   for (let k in tags)
-    if (url[k] != null) return Math.ceil (tags[k])
+    if (url[k] != null) return tags[k]
   return tags.hash
 }
 
@@ -87,7 +95,7 @@ const preResolve = (url1, url2) =>
 
 const resolve = (url1, url2) => {
   const r = preResolve (url1, url2), o = ord (r)
-  if (o === tags.scheme || o === tags.hash   && r.hash   != null) return r
+  if (o === tags.scheme || o === tags.hash && r.hash != null) return r
   else throw new Error (`Failed to resolve <${print(url1)}> against <${print(url2)}>`)
 }
 
@@ -119,10 +127,9 @@ const forceWebUrl = url => {
 }
 
 const force = url => {
-  const scheme = low (url.scheme)
-  const s = scheme in specials
-  if (scheme === 'file') return forceFileUrl (url)
-  else if (s) return forceWebUrl (url)
+  const mode = specials [low (url.scheme)] || modes.generic
+  if (mode === modes.file) return forceFileUrl (url)
+  else if (mode === modes.web) return forceWebUrl (url)
   else return url
 }
 
@@ -214,7 +221,7 @@ const percentEncode = (url, options, profile = profileFor (url)) => {
     else if (k === 'host' && url[k] != null) {
       if (_isIp6 (url.host)) continue
       // TODO use type flags to distinguish domains rather than this..
-      else if (isSpecial (url)) r[k] = punycode.toASCII (url[k])
+      else if (modeFor (url) & modes.special) r[k] = punycode.toASCII (url[k])
       else r[k] = pct.encode (url[k], profile[k], options)
     }
     else if (k in profile && url[k] != null)
@@ -230,7 +237,7 @@ const _isIp6 = str =>
 
 const profileFor = (url, fallback) => {
   const scheme = url.scheme
-  const special = isSpecial (url)
+  const special = modeFor (url) & modes.special
   const minimal = special ? false : !isBase (url)
   return getProfile ({ minimal, special })
 }
@@ -277,17 +284,6 @@ const _print = url => {
 // URL Parsing
 // -----------
 
-// 'Parser modes'
-
-const modes =
-  { generic:0, web:1, file:2, special:3 }
-
-const modeFor = ({ scheme }) =>
-  _modeMap [low (scheme)] || modes.generic
-
-const _modeMap =
-  { http:1, https:1, ws:1, wss:1, ftp:1, file:2 }
-
 // Parser states
 // Using bitflags, but also order
 
@@ -298,7 +294,7 @@ const [ START, SCHEME, SS, AUTH, PATH, QUERY, FRAG ]
   = flags ()
 
 const [ CR, LF, TAB, SP, QUE, HASH, COL, PLUS, MIN, DOT, SL, SL2, BAR ] =
-  '\r\n\t ?#:+-./\\|' .split ('') .map (_ => _.charCodeAt (0))
+  [...'\r\n\t ?#:+-./\\|'] .map (_ => _.charCodeAt (0))
 
 // ### URL Parsing
 
@@ -446,7 +442,9 @@ function parseAuth (input, mode, percentCoded = true) {
   //   throw new Error ('ERR_INVALID_WEB_HOST')
 
   host = parseHost (host, mode, percentCoded)
-  return { user, pass, host, port }
+  const auth = { user, pass, host, port }
+  for (let k in auth) if (auth[k] == null) delete auth[k]
+  return auth
 }
 
 
@@ -454,13 +452,10 @@ function parseAuth (input, mode, percentCoded = true) {
 // =======
 
 module.exports = {
-  low,
-  isBase, isSpecial, specials,
+  isBase, isResolved,
   ord, upto, goto, preResolve, resolve, force,
   normalise, normalize:normalise,
   percentEncode,
   modes, modeFor, parse, parseAuth, parseHost,
   print,
 }
-
-console.log (module.exports)
