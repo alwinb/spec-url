@@ -1,0 +1,22 @@
+{
+  "name": "url-lib",
+  "version": "1.0.0-beta",
+  "description": "Library for working with  WHATWG URLs",
+  "main": "lib/index/js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "URL",
+    "WHATWG URL",
+    "relative",
+    "normalization",
+    "reference resolution",
+    "resolution"
+  ],
+  "author": "ALwin Blok",
+  "license": "MIT",
+  "dependencies": {
+    "punycode": "^2.1.1"
+  }
+}
