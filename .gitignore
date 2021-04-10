@@ -1,0 +1,4 @@
+node_modules/
+dist/
+test/run/
+.tm_properties
