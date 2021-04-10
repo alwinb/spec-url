@@ -130,7 +130,7 @@ const force = url => {
 // Normalisation
 // -------------
   
-const normalise = (url, coded) => {
+const normalise = (url, coded = true) => {
 
   const r = assign ({}, url)
 
@@ -187,7 +187,7 @@ const normalise = (url, coded) => {
 
 // where
 
-const dots = (seg, coded) =>
+const dots = (seg, coded = true) =>
   seg.length <= 3
     && (seg === '.'
     || coded && low (seg) === '%2e') ? 1 :
