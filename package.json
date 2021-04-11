@@ -1,14 +1,16 @@
 {
-  "name": "url-lib",
-  "version": "1.0.0-beta",
-  "description": "Library for working with  WHATWG URLs",
-  "main": "lib/index/js",
+  "name": " spec-url",
+  "version": "1.0.0-rc",
+  "description": "URL library that implements a reference resolution algorithm for WHATWG URLs",
+  "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "URL",
-    "WHATWG URL",
+    "URL Specification",
+    "reference implementation",
+    "WHATWG URL Standard",
     "relative",
     "normalization",
     "reference resolution",

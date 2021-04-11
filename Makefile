@@ -21,7 +21,7 @@ dist/:
 
 dist/urllib.min.js: dist/ $(sources)
 	@ echo "Making a minified browser bundle"
-	@ echo "window.urllib = require('./src')" | esbuild --bundle --minify > dist/urllib.min.js
+	@ echo "window.specurl = require('./src')" | esbuild --bundle --minify > dist/urllib.min.js
 
 distclean:
 	@ test -d dist/ && echo "Removing dist/" && rm -r dist/ || exit 0
