@@ -210,8 +210,9 @@ const dots = (seg, coded = true) =>
 
 // NB uses punycoding rather than percent coding on domains
 
-const percentEncode = (url, options, profile = profileFor (url)) => {
+const percentEncode = (url, options = { ascii:true }) => {
   const r = assign ({}, url)
+  const profile = profileFor (url)
   for (let k in tags) {
     if (k === 'dirs' && url.dirs) {
       const _dirs = (r.dirs = [])
@@ -219,9 +220,9 @@ const percentEncode = (url, options, profile = profileFor (url)) => {
         _dirs.push (pct.encode (x, profile.dir, options))
     }
     else if (k === 'host' && url[k] != null) {
-      if (_isIp6 (url.host)) continue
       // TODO use type flags to distinguish domains rather than this..
-      else if (modeFor (url) & modes.special) r[k] = punycode.toASCII (url[k])
+      if (_isIp6 (url.host)) continue
+      else if (options.ascii && modeFor (url) & modes.special) r[k] = punycode.toASCII (url[k])
       else r[k] = pct.encode (url[k], profile[k], options)
     }
     else if (k in profile && url[k] != null)
