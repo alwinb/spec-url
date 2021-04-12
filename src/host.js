@@ -79,7 +79,7 @@ const ipv4 = {
     while ((match = _ip4num.exec (input))) {
       count++
       const num
-        = match[1] ? parseInt (match[1]||'0', 16)
+        = match[1] != null ? parseInt (match[1]||'0', 16)
         : match[2] ? parseInt (match[2], 8)
         : parseInt (match[3], 10)
 
