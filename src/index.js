@@ -60,7 +60,7 @@ const upto = (url, ord) => {
 
 // ### The Goto operations
 
-const goto = (url1, url2, { strict = true } = { }) => {
+const goto = (url1, url2, { strict = false } = { }) => {
   const { scheme:s1 } = url1, { scheme:s2 } = url2
   if (!strict && s1 && s2 && low (s1) === low (s2)) {
     url1 = setProto ({ scheme:s2   }, url1)
