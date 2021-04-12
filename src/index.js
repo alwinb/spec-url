@@ -116,9 +116,9 @@ const forceWebUrl = url => {
     while (!str && dirs.length) str = dirs.shift ()
     if (!str) { str = url.file; delete url.file }
     if (str) {
-      const auth = parseAuth (str, modes.web, url.percentCoded) // REVIEW percentCoded
-      auth.dirs = dirs
-      assign (url, auth)
+      assign (url, parseAuth (str, modes.web))
+      if (dirs.length) url.dirs = dirs
+      else delete url.dirs
     }
     else throw new Error ('Cannot force <'+print(url)+'>')
   }
