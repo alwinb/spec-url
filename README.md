@@ -55,6 +55,17 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
 * parseHost (string)
 * print (url)
 
+### Host processing
+
+* ipv4
+  * parse (string)
+  * print (number)
+  * normalise (string)
+* ipv6
+  * parse (string)
+  * print (num-array)
+  * normalise (string)
+
 
 Notes on the Specification
 --------------------------

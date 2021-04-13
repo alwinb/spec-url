@@ -1,6 +1,6 @@
 const punycode = require ('punycode')
 const { pct, getProfile } = require ('./pct')
-const { parseHost } = require ('./host')
+const { parseHost, ipv4, ipv6 } = require ('./host')
 const { setPrototypeOf:setProto, assign } = Object
 
 // URL Core
@@ -460,5 +460,6 @@ module.exports = {
   normalise, normalize:normalise,
   percentEncode,
   modes, modeFor, parse, parseAuth, parseHost,
+  ipv4, ipv6,
   print,
 }
