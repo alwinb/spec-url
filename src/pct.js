@@ -58,7 +58,8 @@ const pct = {
   encode (input, encodeSet, { ascii = true, incremental = true } = { }) {
     let coded = ''
     for (let char of input) {
-      const cp = char.codePointAt (0)
+      let cp = char.codePointAt (0) // may be an unmatched surrogate
+      if (0xD800 <= cp && cp <= 0xDBFF || 0xDC00 <= cp && cp <= 0xDFFF) cp = 0xFFFD
       const escapeAscii = ascii && (cp < 0x20 || cp > 0x7E)
       const escapePct = !incremental && cp === 0x25
       if (escapePct || escapeAscii || lookup (cp) & encodeSet) for (let byte of utf8.encode (cp)) {
