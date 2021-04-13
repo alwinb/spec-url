@@ -39,6 +39,7 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
 * preResolve (url1, url2)
 * resolve (url1, url2)
 * force (url)
+* forceResolve (url1, url2)
 
 ### Normalisation
 

@@ -133,6 +133,9 @@ const force = url => {
   else return url
 }
 
+const forceResolve = (url1, url2) =>
+  force (resolve (url1, force (url2)))
+
 
 // Normalisation
 // -------------
@@ -453,7 +456,7 @@ function parseAuth (input, mode, percentCoded = true) {
 
 module.exports = {
   isBase, isResolved,
-  ord, upto, goto, preResolve, resolve, force,
+  ord, upto, goto, preResolve, resolve, force, forceResolve,
   normalise, normalize:normalise,
   percentEncode,
   modes, modeFor, parse, parseAuth, parseHost,
