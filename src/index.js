@@ -43,14 +43,14 @@ const low = str =>
 // --------------------
 
 const ord = url => {
-  for (let k in tags)
+  for (const k in tags)
     if (url[k] != null) return tags[k]
   return tags.hash
 }
 
 const upto = (url, ord) => {
   const r = { }
-  for (let k in tags)
+  for (const k in tags)
     if (url[k] == null) continue
     else if (tags[k] < ord) r[k] = url[k]
     else if (tags[k] === ord && k === 'dirs')
@@ -73,7 +73,7 @@ const goto = (url1, url2, { strict = false } = { }) => {
 
 const strictGoto = (url1, url2) => {
   const r = upto (url1, ord (url2))
-  for (let k in tags)
+  for (const k in tags)
     if (url2[k] == null) continue
     else if (k === 'dirs')
       r.dirs = [...(r.dirs||[]), ...url2.dirs]
@@ -155,7 +155,7 @@ const normalise = (url, coded = true) => {
   // ### Path segement normalisation
 
   const dirs = []
-  for (let x of r.dirs||[]) {
+  for (const x of r.dirs||[]) {
     const isDots = dots (x, coded)
     if (isDots === 2) dirs.pop ()
     else if (!isDots) dirs.push (x)
@@ -187,7 +187,7 @@ const normalise = (url, coded = true) => {
   else if (url.port === 21 && scheme === 'ftp')
     delete r.port
 
-  for (let k in tags)
+  for (const k in tags)
     if (r[k] == null) delete r[k]
   return r
 }
@@ -213,10 +213,10 @@ const dots = (seg, coded = true) =>
 const percentEncode = (url, options = { ascii:true }) => {
   const r = assign ({}, url)
   const profile = profileFor (url)
-  for (let k in tags) {
+  for (const k in tags) {
     if (k === 'dirs' && url.dirs) {
       const _dirs = (r.dirs = [])
-      for (let x of url.dirs)
+      for (const x of url.dirs)
         _dirs.push (pct.encode (x, profile.dir, options))
     }
     else if (k === 'host' && url[k] != null) {
@@ -237,7 +237,6 @@ const _isIp6 = str =>
   str != null && str[0] === '[' && str[str.length-1] === ']'
 
 const profileFor = (url, fallback) => {
-  const scheme = url.scheme
   const special = modeFor (url) & modes.special
   const minimal = special ? false : !isBase (url)
   return getProfile ({ minimal, special })
@@ -263,7 +262,7 @@ const print = url => {
 const _print = url => {
   let result = ''
   const hasCreds = url.user != null
-  for (let k in tags) if (url[k] != null) {
+  for (const k in tags) if (url[k] != null) {
     const v = url[k]
     result +=
       k === 'scheme' ? ( v + ':') :
@@ -444,7 +443,7 @@ function parseAuth (input, mode, percentCoded = true) {
 
   host = parseHost (host, mode, percentCoded)
   const auth = { user, pass, host, port }
-  for (let k in auth) if (auth[k] == null) delete auth[k]
+  for (const k in auth) if (auth[k] == null) delete auth[k]
   return auth
 }
 
