@@ -43,10 +43,6 @@ const testSet = new WebTests (testData, runTest)
   .assert ('equal href', (input, output, error) =>
     input.failure || input.href === output.href )
 
-// TODO validate 'dirs' to be iterable
-// And.. also make a defensive copy?
-// var r = new Url ('file:///foo').set ({ dirs:1 })
-// log (r)
 
 // Run Tests
 // ---------
