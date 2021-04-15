@@ -1,6 +1,11 @@
 URL Implementation
 ==================
 
+[![NPM version][npm-image]][npm-url]
+
+[npm-image]: https://img.shields.io/npm/v/spec-url.svg
+[npm-url]: https://npmjs.org/package/spec-url
+
 # 🌲
 
 An URL manipulation library that supports URL records, relative URLs, reference resolution and a number of other elementary operations on URLs in a way that is compatible with the [WHATWG URL Standard][wwg].
