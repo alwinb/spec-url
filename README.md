@@ -56,8 +56,8 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
 * modes
 * modeFor (url)
 * parse (string [, mode])
-* parseAuth (string)
-* parseHost (string)
+* parseAuth (string [, mode])
+* parseHost (string [, mode])
 * print (url)
 
 ### Host processing

@@ -214,25 +214,36 @@ const dots = (seg, coded = true) =>
 // NB uses punycoding rather than percent coding on domains
 
 const percentEncode = (url, options = { ascii:true }) => {
-  const r = assign ({}, url)
-  const profile = profileFor (url)
-  for (const k in tags) {
-    if (k === 'dirs' && url.dirs) {
+  const r = {}, profile = profileFor (url)
+  for (const k in tags) if (url[k] != null) {
+    const v = url[k]
+    if (k === 'dirs') {
       const _dirs = (r.dirs = [])
-      for (const x of url.dirs)
+      for (const x of v)
         _dirs.push (pct.encode (x, profile.dir, options))
     }
-    else if (k === 'host' && url[k] != null) {
+    else if (k === 'host') {
       // TODO use type flags to distinguish domains rather than this..
-      if (_isIp6 (url.host)) continue
-      else if (options.ascii && modeFor (url) & modes.special) r[k] = punycode.toASCII (url[k])
-      else r[k] = pct.encode (url[k], profile[k], options)
+      if (_isIp6 (v)) r[k] = v
+      else if (modeFor (url) & modes.special)
+        r[k] = options.ascii ? punycode.toASCII (v) : v
+      else r[k] = pct.encode (v, profile[k], options)
     }
-    else if (k in profile && url[k] != null)
-      r[k] = pct.encode (url[k], profile[k], options)
+    else r[k] = k in profile ? pct.encode (v, profile[k], options) : v
   }
   return r
 }
+
+const _decode = getProfile ({})
+const percentDecode = url => {
+  const r = {}
+  for (let k in tags) if (url[k] != null)
+    r[k] = k === 'dirs' ? url[k] .map (pct.decode)
+      : k in _decode ? pct.decode (url[k])
+      : url[k]
+  return r
+}
+
 
 // TODO design the ip4/ip6 host representation for the spec
 
@@ -458,7 +469,7 @@ module.exports = {
   isBase, isResolved,
   ord, upto, goto, preResolve, resolve, force, forceResolve,
   normalise, normalize:normalise,
-  percentEncode,
+  percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,
   ipv4, ipv6,
   print,

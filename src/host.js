@@ -27,7 +27,7 @@ function parseHost (input, mode, percentCoded = true) {
         return ipv4.print (address)
 
       if (!r.length || (_nonhost.lastIndex = 0, _nonhost .test (r)))
-        throw new Error ('ERR_FORBIDDEN_HOST_CODEPOINT') // `Host parser: Invalid host <${r}>`)
+        throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
 
       return r
     }
