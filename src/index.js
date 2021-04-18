@@ -466,6 +466,7 @@ function parseAuth (input, mode, percentCoded = true) {
 // =======
 
 module.exports = {
+  version: '1.1.0',
   isBase, isResolved,
   ord, upto, goto, preResolve, resolve, force, forceResolve,
   normalise, normalize:normalise,

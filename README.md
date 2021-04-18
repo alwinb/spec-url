@@ -50,6 +50,7 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
 
 * normalise (url), normalize (url)
 * percentEncode (url)
+* percentDecode (url)
 
 ### Parsing and Printing
 
