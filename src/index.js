@@ -1,5 +1,5 @@
 const punycode = require ('punycode')
-const { pct, getProfile } = require ('./pct')
+const { utf8, pct, getProfile, isInSet } = require ('./pct')
 const { parseHost, ipv4, ipv6 } = require ('./host')
 const { setPrototypeOf:setProto, assign } = Object
 
@@ -9,14 +9,8 @@ const { setPrototypeOf:setProto, assign } = Object
 // Model
 // -----
 
-const tags = { 
-  scheme:1,
-  user:2, pass:2,
-  host:2, port:2,
-  drive:3,
-  root:4, dirs:5, file:6,
-  query:7, hash:8
-}
+const ords =
+  { scheme:1, auth:2, drive:3, root:4, dir:5, file:6, query:7, hash:8 }
 
 const modes =
   { generic:0, web:1, file:2, special:3 }
@@ -31,8 +25,8 @@ const isBase = ({ scheme, host, root }) =>
   scheme != null && (host != null || root != null)
 
 const isResolved = url => {
-  const o = ord (r)
-  return o === tags.scheme || o === tags.hash && r.hash != null
+  const o = ord (url)
+  return o === ords.scheme || o === ords.hash && url.hash != null
 }
 
 const low = str =>
@@ -42,10 +36,19 @@ const low = str =>
 // Reference Resolution
 // --------------------
 
+const tags = { 
+  scheme:1,
+  user:2, pass:2,
+  host:2, port:2,
+  drive:3,
+  root:4, dirs:5, file:6,
+  query:7, hash:8
+}
+
 const ord = url => {
   for (const k in tags)
     if (url[k] != null) return tags[k]
-  return tags.hash
+  return ords.hash
 }
 
 const upto = (url, ord) => {
@@ -89,13 +92,13 @@ const strictGoto = (url1, url2) => {
 // ### Resolution Operations
 
 const preResolve = (url1, url2) =>
-  isBase (url2) || ord (url1) === tags.hash
+  isBase (url2) || ord (url1) === ords.hash
     ? goto (url2, url1, { strict:false })
     : url1
 
 const resolve = (url1, url2) => {
   const r = preResolve (url1, url2), o = ord (r)
-  if (o === tags.scheme || o === tags.hash && r.hash != null) return r
+  if (o === ords.scheme || o === ords.hash && r.hash != null) return r
   else throw new Error (`Failed to resolve <${print(url1)}> against <${print(url2)}>`)
 }
 
@@ -468,10 +471,12 @@ function parseAuth (input, mode, percentCoded = true) {
 module.exports = {
   version: '1.1.0',
   isBase, isResolved,
-  ord, upto, goto, preResolve, resolve, force, forceResolve,
+  ords, ord, upto, goto, 
+  preResolve, resolve, force, forceResolve,
   normalise, normalize:normalise,
   percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,
   ipv4, ipv6,
   print,
+  unstable: { utf8, pct, getProfile, isInSet }
 }

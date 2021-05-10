@@ -1,10 +1,15 @@
 {
-  "name": " spec-url",
   "version": "1.1.0",
+  "name": "spec-url",
   "description": "URL library that implements a reference resolution algorithm for WHATWG URLs",
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "homepage": "https://github.com/alwinb/spec-url#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alwinb/spec-url.git"
   },
   "keywords": [
     "URL",
@@ -16,7 +21,7 @@
     "reference resolution",
     "resolution"
   ],
-  "author": "ALwin Blok",
+  "author": "Alwin Blok",
   "license": "MIT",
   "dependencies": {
     "punycode": "^2.1.1"

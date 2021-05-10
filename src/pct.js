@@ -193,4 +193,4 @@ isInSet = (cp, { name, minimal, special }) =>
 // Exports
 // =======
 
-module.exports = { utf8, pct, getProfile }
+module.exports = { utf8, pct, getProfile, isInSet }

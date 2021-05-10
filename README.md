@@ -38,6 +38,7 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
 
 ### Reference Resolution
 
+* ords
 * ord (url)
 * upto (url, ord)
 * goto (url1, url2 [, options])
