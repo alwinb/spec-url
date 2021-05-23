@@ -12,16 +12,17 @@ An URL manipulation library that supports URL records, relative URLs, reference 
 
 This library serves as a reference implementation for this [URL Specification][url-spec], which is an alternative URL specification that rephrases and generalises the WHATWG URL Standard to add support for relative URLs, reference resolution and a number of other elementary operations. 
 
+People are encouraged to experiment with creating more high level APIs around this library. One example is my [reurl] library, which wraps around spec-url to provide a high level API for immutable URL objects. 
+
 [url-spec]: https://alwinb.github.io/url-specification/
 [url-spec-model]: https://alwinb.github.io/url-specification/#url-model
 [wwg]: https://url.spec.whatwg.org/
+[reurl]: https://github.com/alwinb/reurl
 
 API
 ---
 
 The library exposes a concise, low-level API for working with URL strings and URL records. It models URLs as plain javascript objects and it exposes a number of _functions_ for working with them.
-
-It does not aim to provide an object oriented API. Such interfaces can easily be created on top of this library, if so desired.
 
 ### URLs
 
@@ -72,6 +73,10 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
   * parse (string)
   * print (num-array)
   * normalise (string)
+
+### Parse Resolve and Normalise
+
+* WHATWGParseResolve (string, base-string)
 
 
 Notes on the Specification

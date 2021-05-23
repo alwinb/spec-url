@@ -1,4 +1,4 @@
-const { modeFor, parse, print, percentEncode, normalise, force, resolve, forceResolve } = require ('../src')
+const { modeFor, parse, print, percentEncode, normalise, force, resolve, forceResolve, WHATWGParseResolve } = require ('../src')
 const Tests = require ('./test-runner')
 const log = console.log.bind (console)
 
@@ -11,11 +11,8 @@ const parseResolveAndNormalise = (input, baseUrl = { }) => {
 }
 
 function runTest (test) {
-  const baseUrl = parse (test.base)
-  const url = parse (test.input, modeFor (baseUrl))
-  let resolved = percentEncode (normalise (forceResolve (url, baseUrl)))
+  const resolved = WHATWGParseResolve (test.input, test.base)
   resolved.href = print (resolved)
-  resolved._base = baseUrl
   return resolved
 }
 

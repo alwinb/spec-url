@@ -465,6 +465,16 @@ function parseAuth (input, mode, percentCoded = true) {
 }
 
 
+// WHATWG Parse Resolve and Normalise
+// ----------------------------------
+
+const WHATWGParseResolve = (input, base) => {
+  const baseUrl = parse (base)
+  const url = parse (input, modeFor (baseUrl))
+  return percentEncode (normalise (forceResolve (url, baseUrl)))
+}
+
+
 // Exports
 // =======
 
@@ -476,6 +486,7 @@ module.exports = {
   normalise, normalize:normalise,
   percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,
+  WHATWGParseResolve,
   ipv4, ipv6,
   print,
   unstable: { utf8, pct, getProfile, isInSet }
