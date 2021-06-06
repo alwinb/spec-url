@@ -477,7 +477,7 @@ const WHATWGParseResolve = (input, base) => {
 // =======
 
 module.exports = {
-  version: '1.2.0',
+  version: '1.3.0',
   isBase, isResolved,
   ords, ord, upto, goto, 
   preResolve, resolve, force, forceResolve,
