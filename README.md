@@ -43,10 +43,14 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
 * ord (url)
 * upto (url, ord)
 * goto (url1, url2 [, options])
-* preResolve (url1, url2)
-* resolve (url1, url2)
+* preResolve (url1, url2 [, options])
+* resolve (url1, url2 [, options])
 * force (url)
-* forceResolve (url1, url2)
+* forceResolve (url1, url2 [, options])
+
+The _options_ argument, if present, must be an object with a boolean property _strict_ to indicate if the strict- or non-strict goto operation must be used. It defaults to **false**. 
+
+**NB** The strictness option may be passed to forceResolve as well. This specifies the behaviour of the goto operation that it uses. Using forced resolution itself is not 'strict behaviour' though, but serves as an error recovery measure for file-, and web-URLs that have an empty or absent host. 
 
 ### Normalisation
 
@@ -57,7 +61,7 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
 ### Parsing and Printing
 
 * modes
-* modeFor (url)
+* modeFor (url, fallback)
 * parse (string [, mode])
 * parseAuth (string [, mode])
 * parseHost (string [, mode])

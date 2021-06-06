@@ -18,8 +18,8 @@ const modes =
 const specials =
   { http:1, https:1, ws:1, wss:1, ftp:1, file:2 }
 
-const modeFor = ({ scheme }) =>
-  specials [low (scheme)] || modes.generic
+const modeFor = ({ scheme }, fallback = modes.generic) =>
+  specials [low (scheme)] || fallback
 
 const isBase = ({ scheme, host, root }) =>
   scheme != null && (host != null || root != null)
@@ -91,13 +91,13 @@ const strictGoto = (url1, url2) => {
 
 // ### Resolution Operations
 
-const preResolve = (url1, url2) =>
+const preResolve = (url1, url2, options) =>
   isBase (url2) || ord (url1) === ords.hash
-    ? goto (url2, url1, { strict:false })
+    ? goto (url2, url1, options)
     : url1
 
-const resolve = (url1, url2) => {
-  const r = preResolve (url1, url2), o = ord (r)
+const resolve = (url1, url2, options) => {
+  const r = preResolve (url1, url2, options), o = ord (r)
   if (o === ords.scheme || o === ords.hash && r.hash != null) return r
   else throw new Error (`Failed to resolve <${print(url1)}> against <${print(url2)}>`)
 }
@@ -136,8 +136,8 @@ const force = url => {
   else return url
 }
 
-const forceResolve = (url1, url2) =>
-  force (resolve (url1, force (url2)))
+const forceResolve = (url1, url2, options) =>
+  force (resolve (url1, force (url2), options))
 
 
 // Normalisation
@@ -254,7 +254,7 @@ const _isIp6 = str =>
   str != null && str[0] === '[' && str[str.length-1] === ']'
 
 const profileFor = (url, fallback) => {
-  const special = modeFor (url) & modes.special
+  const special = modeFor (url, fallback) & modes.special
   const minimal = special ? false : !isBase (url)
   return getProfile ({ minimal, special })
 }
@@ -453,10 +453,6 @@ function parseAuth (input, mode, percentCoded = true) {
 
   if (mode === modes.file && (user != null || port != null))
     throw new Error ()
-
-  // Disabled, to allow force to take care of that
-  // if (mode === modes.web && !host)
-  //   throw new Error ('ERR_INVALID_WEB_HOST')
 
   host = parseHost (host, mode, percentCoded)
   const auth = { user, pass, host, port }

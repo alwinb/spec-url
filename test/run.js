@@ -5,11 +5,6 @@ const log = console.log.bind (console)
 // Parse-resolve-and-normalise
 // ---------------------------
 
-const parseResolveAndNormalise = (input, baseUrl = { }) => {
-  const url = parse (input, modeFor (baseUrl))
-  return percentEncode (normalise (force (resolve (url, baseUrl))))
-}
-
 function runTest (test) {
   const resolved = WHATWGParseResolve (test.input, test.base)
   resolved.href = print (resolved)
