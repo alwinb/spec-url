@@ -466,8 +466,10 @@ function parseAuth (input, mode, percentCoded = true) {
 
 const WHATWGParseResolve = (input, base) => {
   const baseUrl = parse (base)
-  const url = parse (input, modeFor (baseUrl))
-  return percentEncode (normalise (forceResolve (url, baseUrl)))
+  const baseMode = modeFor (baseUrl)
+  const url = parse (input, baseMode)
+  const strict = modeFor (url, baseMode) === modes.generic
+  return percentEncode (normalise (forceResolve (url, baseUrl, { strict })))
 }
 
 
