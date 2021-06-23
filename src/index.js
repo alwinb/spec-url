@@ -24,10 +24,8 @@ const modeFor = ({ scheme }, fallback = modes.generic) =>
 const isBase = ({ scheme, host, root }) =>
   scheme != null && (host != null || root != null)
 
-const isResolved = url => {
-  const o = ord (url)
-  return o === ords.scheme || o === ords.hash && url.hash != null
-}
+const isResolved = url =>
+  ord (url) === ords.scheme
 
 const low = str =>
   str ? str.toLowerCase () : str
@@ -92,13 +90,13 @@ const strictGoto = (url1, url2) => {
 // ### Resolution Operations
 
 const preResolve = (url1, url2, options) =>
-  isBase (url2) || ord (url1) === ords.hash
+  isBase (url2) || ord (url1) === ords.hash && url1.hash != null
     ? goto (url2, url1, options)
     : url1
 
 const resolve = (url1, url2, options) => {
-  const r = preResolve (url1, url2, options), o = ord (r)
-  if (o === ords.scheme || o === ords.hash && r.hash != null) return r
+  const r = preResolve (url1, url2, options)
+  if (r.scheme) return r
   else throw new Error (`Failed to resolve <${print(url1)}> against <${print(url2)}>`)
 }
 
@@ -468,8 +466,10 @@ const WHATWGParseResolve = (input, base) => {
   const baseUrl = parse (base)
   const baseMode = modeFor (baseUrl)
   const url = parse (input, baseMode)
-  const strict = modeFor (url, baseMode) === modes.generic
-  return percentEncode (normalise (forceResolve (url, baseUrl, { strict })))
+  const resolved = modeFor (url, baseMode) === modes.generic
+    ? resolve (url, baseUrl, { strict:true })
+    : force (resolve (url, force (baseUrl)), { strict:false })
+  return percentEncode (normalise (resolved))
 }
 
 
