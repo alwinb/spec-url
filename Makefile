@@ -14,14 +14,14 @@ test: test/run/urltestdata.json
 
 clean: testclean distclean
 
-## Browser Bundle
+## ES Module Bundle
 
 dist/:
 	@ mkdir dist/
 
 dist/urllib.min.js: dist/ $(sources)
-	@ echo "Making a minified browser bundle"
-	@ echo "window.specurl = require('./src')" | esbuild --bundle --minify > dist/specurl.min.js
+	@ echo "Making a minified ES module bundle"
+	@ esbuild --bundle --format=esm --minify src/index.js > dist/specurl.min.js
 
 distclean:
 	@ test -d dist/ && echo "Removing dist/" && rm -r dist/ || exit 0
