@@ -1,5 +1,5 @@
-const { pct } = require ('./pct')
-const punycode = require ('punycode')
+import { pct } from './pct.js'
+import punycode from 'punycode'
 const log = console.log.bind (console)
 
 
@@ -190,4 +190,4 @@ const ipv6 = {
 // Exports
 // -------
 
-module.exports = { ipv4, ipv6, parseHost }
+export { ipv4, ipv6, parseHost }

@@ -1,4 +1,4 @@
-const util = require ('util')
+import util from 'util'
 const log = console.log.bind (console)
 
 // TestRunner
@@ -94,4 +94,4 @@ class TestRunner {
 
 }
 
-module.exports = TestRunner
+export default TestRunner

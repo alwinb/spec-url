@@ -1,6 +1,6 @@
-const punycode = require ('punycode')
-const { utf8, pct, getProfile, isInSet } = require ('./pct')
-const { parseHost, ipv4, ipv6 } = require ('./host')
+import punycode from 'punycode'
+import { utf8, pct, getProfile, isInSet } from './pct.js'
+import { parseHost, ipv4, ipv6 } from './host.js'
 const { setPrototypeOf:setProto, assign } = Object
 
 // URL Core
@@ -476,16 +476,17 @@ const WHATWGParseResolve = (input, base) => {
 // Exports
 // =======
 
-module.exports = {
-  version: '1.3.0',
+const unstable = { utf8, pct, getProfile, isInSet }
+
+export {
   isBase, isResolved,
   ords, ord, upto, goto, 
   preResolve, resolve, force, forceResolve,
-  normalise, normalize:normalise,
+  normalise, normalise as normalize,
   percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,
   WHATWGParseResolve,
   ipv4, ipv6,
   print,
-  unstable: { utf8, pct, getProfile, isInSet }
+  unstable
 }
