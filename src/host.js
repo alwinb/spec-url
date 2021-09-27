@@ -1,5 +1,5 @@
 import { pct } from './pct.js'
-import punycode from 'punycode'
+import punycode from 'https://cdn.skypack.dev/punycode'
 const log = console.log.bind (console)
 
 

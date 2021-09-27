@@ -1,6 +1,5 @@
 import { modeFor, parse, print, percentEncode, normalise, force, resolve, forceResolve, WHATWGParseResolve } from '../src/index.js'
 import Tests from './test-runner.js'
-import { readFile } from 'fs/promises'
 const log = console.log.bind (console)
 
 // Parse-resolve-and-normalise
@@ -20,7 +19,7 @@ class WebTests extends Tests {
   compactOutput (output) { return output.href }
 }
 
-const file = await readFile ('test/run/urltestdata.json', { encoding: "utf8" })
+const file = await Deno.readTextFile ('test/run/urltestdata.json')
 const testDataRaw = JSON.parse (file)
 
 const testData = testDataRaw .map (test => {
@@ -46,4 +45,4 @@ const testSet = new WebTests (testData, runTest)
 log ('      Web Platform URL Tests      ')
 log ('==================================')
 const ok = testSet.run ()
-process.exit (ok ? 0 : 1)
+Deno.exit (ok ? 0 : 1)

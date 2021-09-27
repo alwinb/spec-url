@@ -1,4 +1,4 @@
-import punycode from 'punycode'
+import punycode from 'https://cdn.skypack.dev/punycode'
 import { utf8, pct, getProfile, isInSet } from './pct.js'
 import { parseHost, ipv4, ipv6 } from './host.js'
 const { setPrototypeOf:setProto, assign } = Object

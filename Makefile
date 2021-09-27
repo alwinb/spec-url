@@ -9,7 +9,7 @@ all: dist/urllib.min.js
 
 test: test/run/urltestdata.json
 	@ echo ""
-	@ node test/run.js
+	@ deno run --allow-read="test/run/urltestdata.json" test/run.js
 	@ echo ""
 
 clean: testclean distclean
