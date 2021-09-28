@@ -21,26 +21,19 @@ const specials =
 const modeFor = ({ scheme }, fallback = modes.generic) =>
   specials [low (scheme)] || fallback
 
-const isBase = ({ scheme, host, root }) =>
-  scheme != null && (host != null || root != null)
-
-const isResolved = url =>
-  ord (url) === ords.scheme
+const isFragment = url =>
+  url.hash != null && ord (url) === ords.hash
 
 const low = str =>
   str ? str.toLowerCase () : str
 
 
-// Reference Resolution
-// --------------------
+// Order, Upto and Goto operations
+// -------------------------------
 
-const tags = { 
-  scheme:1,
-  user:2, pass:2,
-  host:2, port:2,
-  drive:3,
-  root:4, dirs:5, file:6,
-  query:7, hash:8
+const tags = {
+  scheme:1, user:2, pass:2, host:2, port:2, drive:3,
+  root:4, dirs:5, file:6, query:7, hash:8
 }
 
 const ord = url => {
@@ -59,57 +52,45 @@ const upto = (url, ord) => {
   return r
 }
 
-// ### The Goto operations
-
-const goto = (url1, url2, { strict = false } = { }) => {
-  const { scheme:s1 } = url1, { scheme:s2 } = url2
-  if (!strict && s1 && s2 && low (s1) === low (s2)) {
-    url1 = setProto ({ scheme:s2   }, url1)
-    url2 = setProto ({ scheme:null }, url2)
-  }
-  return strictGoto (url1, url2)
-}
-
-// #### Strict Goto
-
-const strictGoto = (url1, url2) => {
+const goto = (url1, url2) => {
   const r = upto (url1, ord (url2))
   for (const k in tags)
     if (url2[k] == null) continue
     else if (k === 'dirs')
       r.dirs = [...(r.dirs||[]), ...url2.dirs]
     else r[k] = url2[k]
-
   // Patch up root if needed
   if ((r.host != null || r.drive) && (r.dirs || r.file))
     r.root = '/'
-  
   return r
 }
 
-// ### Resolution Operations
 
-const preResolve = (url1, url2, options) =>
-  isBase (url2) || ord (url1) === ords.hash && url1.hash != null
-    ? goto (url2, url1, options)
-    : url1
+// Base URLs
+// ---------
 
-const resolve = (url1, url2, options) => {
-  const r = preResolve (url1, url2, options)
-  if (r.scheme) return r
-  else throw new Error (`Failed to resolve <${print(url1)}> against <${print(url2)}>`)
+const isBase = ({ scheme, host, drive, root }) => {
+  const mode = specials [low (scheme)] || modes.generic
+  return scheme &&
+    ( mode & modes.file ? host != null && (drive || root)
+    : mode & modes.web  ? host && root
+    : host != null || root ) // last one is WHATWG specific
 }
 
-// ### The Force operation
+class ForceError extends TypeError {
+  constructor (url) {
+    super (`Cannot coerce ${print(url)} to a base-URL`)
+  }
+}
 
-const forceFileUrl = url => {
+const forceAsFileUrl = url => {
   url = assign ({ }, url)
   if (url.host == null) url.host = ''
   if (url.drive == null) url.root = '/'
   return url
 }
 
-const forceWebUrl = url => {
+const forceAsWebUrl = url => {
   url = assign ({ }, url)
   if (!url.host) {
     let str = url.host
@@ -117,11 +98,12 @@ const forceWebUrl = url => {
     while (!str && dirs.length) str = dirs.shift ()
     if (!str) { str = url.file; delete url.file }
     if (str) {
-      assign (url, parseAuth (str, modes.web))
+      try { assign (url, parseAuth (str, modes.web)) }
+      catch (e) { throw new ForceError (url) }
       if (dirs.length) url.dirs = dirs
       else delete url.dirs
     }
-    else throw new Error ('Cannot force <'+print(url)+'>')
+    else throw new ForceError (url)
   }
   url.root = '/'
   return url
@@ -129,13 +111,50 @@ const forceWebUrl = url => {
 
 const force = url => {
   const mode = specials [low (url.scheme)] || modes.generic
-  if (mode === modes.file) return forceFileUrl (url)
-  else if (mode === modes.web) return forceWebUrl (url)
-  else return url
+  if (mode === modes.file) return forceAsFileUrl (url)
+  else if (mode === modes.web) return forceAsWebUrl (url)
+  else if (url.scheme) return url
+  else throw new ForceError (url)
 }
 
-const forceResolve = (url1, url2, options) =>
-  force (resolve (url1, force (url2), options))
+
+// Reference Resolution
+// --------------------
+
+class ResolveError extends TypeError {
+  constructor (url1, url2) {
+    super (`Cannot resolve <${print(url1)}> against <${print(url2)}>`)
+  }
+}
+
+// 'Strict' Reference Resolution according to RFC3986
+
+const genericResolve = (url1, url2) => {
+  if (url1.scheme || url2.scheme) return goto (url2, url1)
+  else throw new ResolveError (url1, url2)
+}
+
+// 'Non-strict' Reference Resolution according to RFC3986
+
+const legacyResolve = (url1, url2) => {
+  if (url1.scheme && low (url1.scheme) === low (url2.scheme))
+    ( url2 = setProto ({ scheme:url1.scheme }, url2)
+    , url1 = setProto ({ scheme:null }, url1) )
+  return genericResolve (url1, url2)
+}
+
+// WHATWG style reference resolution
+
+const WHATWGResolve = (url1, url2) => {
+  const mode = url1.scheme ? modeFor (url1) : modeFor (url2)
+  if (mode & modes.special)
+    return force (legacyResolve (url1, url2))
+  if (isBase (url2))
+    return genericResolve (url1, url2)
+  if (url2.scheme && (url1.scheme || isFragment (url1))) // opaque-path-resolve
+    return goto (url2, url1)
+  else throw new ResolveError (url1, url2)
+}
 
 
 // Normalisation
@@ -259,7 +278,7 @@ const profileFor = (url, fallback) => {
 
 // TODO the WhatWG spec requires encoding all non-ASCII, but it makes sense to
 // make that configurable also in the URL Standard. 
-// It may even be possible to create profiles that produce RFC 3986 URIs and
+// It should be possible to create profiles that produce RFC 3986 URIs and
 // RFC 3987 IRIs. 
 
 
@@ -311,6 +330,9 @@ const [ START, SCHEME, SS, AUTH, PATH, QUERY, FRAG ]
 const [ CR, LF, TAB, SP, QUE, HASH, COL, PLUS, MIN, DOT, SL, SL2, BAR ] =
   [...'\r\n\t ?#:+-./\\|'] .map (_ => _.charCodeAt (0))
 
+const isAlpha = c =>
+  0x41 <= c && c <= 0x5A || 0x61 <= c && c <= 0x7A
+
 // ### URL Parsing
 
 function parse (input, mode = modes.web) {
@@ -338,8 +360,8 @@ function parse (input, mode = modes.web) {
 
     const isDelim
       =  state === SCHEME && c === COL
-      || (isSlash || c === QUE) && state < QUERY
-      || c === HASH && state < FRAG
+      || state < QUERY && (isSlash || c === QUE)
+      || state < FRAG  && c === HASH
       || isNaN (c) 
 
     if (isDelim) {
@@ -390,13 +412,10 @@ function parse (input, mode = modes.web) {
     // Buffer characters otherwise;
     // Maintain state for scheme, path-root and drive
 
-    const isAlpha =
-      0x41 <= c && c <= 0x5A || 0x61 <= c && c <= 0x7A
-
-    if (state & SCHEME && isAlpha)
+    if (state & SCHEME && isAlpha (c))
       state = SCHEME
 
-    else if (state === SCHEME && (c !== PLUS && c !== MIN && c !== DOT) && (c < 48 || 57 < c))
+    else if (state === SCHEME && (c !== PLUS && c !== MIN && c !== DOT) && (c < 0x30 || 0x39 < c))
       state = PATH
 
     else if (state & (START|SS)) {
@@ -406,7 +425,7 @@ function parse (input, mode = modes.web) {
 
     if (mode & modes.file && !url.drive && !url.dirs && state < QUERY) {
       isDrive = letter && (c === BAR || state &~ SCHEME && c === COL)
-      letter = !buffer && isAlpha
+      letter = !buffer && isAlpha (c)
     }
     else isDrive = false
 
@@ -463,12 +482,14 @@ function parseAuth (input, mode, percentCoded = true) {
 // ----------------------------------
 
 const WHATWGParseResolve = (input, base) => {
+  if (base == null) {
+    const resolved = force (parse (input))
+    return percentEncode (normalise (resolved))
+  }
   const baseUrl = parse (base)
   const baseMode = modeFor (baseUrl)
   const url = parse (input, baseMode)
-  const resolved = modeFor (url, baseMode) === modes.generic
-    ? resolve (url, baseUrl, { strict:true })
-    : force (resolve (url, force (baseUrl)), { strict:false })
+  const resolved = WHATWGResolve (url, baseUrl)
   return percentEncode (normalise (resolved))
 }
 
@@ -481,9 +502,9 @@ const unstable = { utf8, pct, getProfile, isInSet }
 
 export {
   version,
-  isBase, isResolved,
   ords, ord, upto, goto, 
-  preResolve, resolve, force, forceResolve,
+  isBase, forceAsFileUrl, forceAsWebUrl, force, 
+  genericResolve, legacyResolve, WHATWGResolve, WHATWGResolve as resolve,
   normalise, normalise as normalize,
   percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,
