@@ -110,7 +110,7 @@ const url = 1<<9,
   dir_m   = 1<<3,
   query   = 1<<2,
   query_s = 1<<1,
-  hash = 1<<0
+  hash    = 1<<0
 
 // Lookup tables:
 // The rightmost bits encode the hash-encode-set,
