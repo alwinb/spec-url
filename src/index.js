@@ -502,7 +502,7 @@ const WHATWGParseResolve = (input, base) => {
 // Exports
 // =======
 
-const version = '1.4.0'
+const version = '2.0.0-dev.1'
 const unstable = { utf8, pct, getProfile, isInSet }
 
 export {
