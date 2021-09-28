@@ -476,9 +476,11 @@ const WHATWGParseResolve = (input, base) => {
 // Exports
 // =======
 
+const version = '1.4.0'
 const unstable = { utf8, pct, getProfile, isInSet }
 
 export {
+  version,
   isBase, isResolved,
   ords, ord, upto, goto, 
   preResolve, resolve, force, forceResolve,
