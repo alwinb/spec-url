@@ -140,7 +140,7 @@ const forceResolve = (url1, url2, options) =>
 
 // Normalisation
 // -------------
-  
+
 const normalise = (url, coded = true) => {
 
   const r = assign ({}, url)
@@ -158,19 +158,24 @@ const normalise = (url, coded = true) => {
 
   // ### Path segement normalisation
 
-  const dirs = []
-  for (const x of r.dirs||[]) {
-    const isDots = dots (x, coded)
-    if (isDots === 2) dirs.pop ()
-    else if (!isDots) dirs.push (x)
+  if (!isBase (url) && url.dirs)
+    r.dirs = r.dirs.slice ()
+
+  else {
+    const dirs = []
+    for (const x of r.dirs||[]) {
+      const isDots = dots (x, coded)
+      if (isDots === 2) dirs.pop ()
+      else if (!isDots) dirs.push (x)
+    }
+    if (r.file) {
+      const isDots = dots (r.file, coded)
+      if (isDots === 2) dirs.pop ()
+      if (isDots) delete r.file
+    }
+    if (dirs.length) r.dirs = dirs
+    else delete r.dirs
   }
-  if (r.file) {
-    const isDots = dots (r.file, coded)
-    if (isDots === 2) dirs.pop ()
-    if (isDots) delete r.file
-  }
-  if (dirs.length) r.dirs = dirs
-  else delete r.dirs
 
   // ### Drive letter normalisation
 
