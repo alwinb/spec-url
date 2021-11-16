@@ -19,7 +19,7 @@ const specials =
   { http:1, https:1, ws:1, wss:1, ftp:1, file:2 }
 
 const modeFor = ({ scheme }, fallback = modes.generic) =>
-  specials [low (scheme)] || fallback
+  scheme ? specials [low (scheme)] || modes.generic : fallback;
 
 const isBase = ({ scheme, host, root }) =>
   scheme != null && (host != null || root != null)
