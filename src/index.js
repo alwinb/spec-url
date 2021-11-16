@@ -66,16 +66,8 @@ const goto = (url1, url2) => {
 }
 
 
-// Base URLs
-// ---------
-
-const isBase = ({ scheme, host, drive, root }) => {
-  const mode = specials [low (scheme)] || modes.generic
-  return scheme &&
-    ( mode & modes.file ? host != null && (drive || root)
-    : mode & modes.web  ? host && root
-    : host != null || root ) // last one is WHATWG specific
-}
+// Forcing
+// -------
 
 class ForceError extends TypeError {
   constructor (url) {
@@ -127,6 +119,11 @@ class ResolveError extends TypeError {
   }
 }
 
+// Opaque paths - WHATWG specific
+
+const hasOpaquePath = ({ scheme, host, root }) =>
+  host == null && root == null && modeFor ({ scheme }) === modes.generic
+
 // 'Strict' Reference Resolution according to RFC3986
 
 const genericResolve = (url1, url2) => {
@@ -175,7 +172,7 @@ const normalise = (url, coded = true) => {
 
   // ### Path segement normalisation
 
-  if (!isBase (url) && url.dirs)
+  if (hasOpaquePath (url) && url.dirs)
     r.dirs = r.dirs.slice ()
 
   else {
@@ -275,7 +272,7 @@ const _isIp6 = str =>
 
 const profileFor = (url, fallback) => {
   const special = modeFor (url, fallback) & modes.special
-  const minimal = special ? false : !isBase (url)
+  const minimal = special ? false : hasOpaquePath (url)
   return getProfile ({ minimal, special })
 }
 
@@ -485,14 +482,13 @@ function parseAuth (input, mode, percentCoded = true) {
 // ----------------------------------
 
 const WHATWGParseResolve = (input, base) => {
-  if (base == null) {
-    const resolved = force (parse (input))
-    return percentEncode (normalise (resolved))
+  let resolved;
+  if (base != null) {
+    const baseUrl = parse (base)
+    const url = parse (input, modeFor (baseUrl))
+    resolved = WHATWGResolve (url, baseUrl)
   }
-  const baseUrl = parse (base)
-  const baseMode = modeFor (baseUrl)
-  const url = parse (input, baseMode)
-  const resolved = WHATWGResolve (url, baseUrl)
+  else resolved = force (parse (input))
   return percentEncode (normalise (resolved))
 }
 
@@ -506,8 +502,8 @@ const unstable = { utf8, pct, getProfile, isInSet }
 export {
   version,
   ords, ord, upto, goto, 
-  isBase, forceAsFileUrl, forceAsWebUrl, force, 
-  genericResolve, legacyResolve, WHATWGResolve, WHATWGResolve as resolve,
+  forceAsFileUrl, forceAsWebUrl, force, 
+  hasOpaquePath, genericResolve, legacyResolve, WHATWGResolve, WHATWGResolve as resolve,
   normalise, normalise as normalize,
   percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,

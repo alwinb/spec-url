@@ -42,15 +42,15 @@ Here, **dirs**, if present is an non-empty array of strings and all other attrib
 * upto (url, ord)
 * goto (url1, url2 [, options])
 
-### Base URLs
+### Forcing
 
-* isBase (url)
 * forceAsFileUrl (url)
 * forceAsWebUrl (url)
 * force (url)
 
 ### Reference Resolution
 
+* hasOpaquePath (url)
 * genericResolve (url1, url2) — RFC 3986 strict resolution.
 * legacyResolve (url1, url2) — RFC 3986 non-strict resolution.
 * WHATWGResolve (url1, url2)
