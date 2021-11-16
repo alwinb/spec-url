@@ -149,10 +149,8 @@ const WHATWGResolve = (url1, url2) => {
   const mode = url1.scheme ? modeFor (url1) : modeFor (url2)
   if (mode & modes.special)
     return force (legacyResolve (url1, url2))
-  if (isBase (url2))
+  if (url1.scheme || isFragment (url1) || url2.host != null || url2.root)
     return genericResolve (url1, url2)
-  if (url2.scheme && (url1.scheme || isFragment (url1))) // opaque-path-resolve
-    return goto (url2, url1)
   else throw new ResolveError (url1, url2)
 }
 
