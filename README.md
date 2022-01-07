@@ -33,7 +33,7 @@ In this implementation URLs are modeled as plain JavaScript objects with the fol
 
 * **scheme**, **user**, **pass**, **host**, **port**, **drive**, **root**, **dirs**, **file**, **query**, **hash**
 
-Here, **dirs**, if present is an non-empty array of strings and all other attributes are strings. The string valued attributes are subject to the constraints as described in the specification.
+Here, **dirs**, if present is an non-empty array of strings, and all other attributes are strings. The string valued attributes are subject to the constraints as described in the specification.
 
 ### Goto
 
@@ -104,10 +104,16 @@ There is a one-to-one correspondence between this representation and sequences o
 Changelog
 ---------
 
-### Version 2.0.0-dev.0 (Unstable)
+### Version 2.1.0-dev
+
+- Refactored the percent coding, making it possible to convert URL-objects to a valid URI (RFC3986), a _valid_ URL, or as specified by the WHATWG, to a normalised but potentially invalid URL.
+- Catching up with WHATWG changes: the host parser will now raise an error on domains that end in a number.
+- Removed the _isBase_ method in favour of an _hasOpaquePath_ method.
+
+### Version 2.0.0-dev.1
 
 - Changes to the API for forcing and reference resolution.
-- A fix for normalisation of opaque-path-URL that lead to behaviour that was different from the WHATWG Standard. 
+- A fix for normalisation of opaque-path-URL that resulted in a difference in behaviour with the WHATWG Standard. 
 
 ### Version 1.4.0
 
