@@ -1,5 +1,5 @@
 import punycode from 'punycode'
-import { utf8, pct, getProfile, isInSet } from './pct.js'
+import { utf8, pct, encodeProfiles as profiles, PercentEncoder, encodeSets as sets } from './pct.js'
 import { parseHost, ipv4, ipv6 } from './host.js'
 const { setPrototypeOf:setProto, assign } = Object
 
@@ -71,7 +71,7 @@ const goto = (url1, url2) => {
 
 class ForceError extends TypeError {
   constructor (url) {
-    super (`Cannot coerce ${print(url)} to a base-URL`)
+    super (`Cannot coerce <${print(url)}> to a base-URL`)
   }
 }
 
@@ -231,36 +231,75 @@ const dots = (seg, coded = true) =>
 // Percent Coding URLs
 // -------------------
 
+// The WHATWG standard encodes all non-ASCII, but it makes sense to
+// make that configurable also in my URL Specification. 
+// It is be possible to have profiles that produce RFC 3986 URIs and
+// RFC 3987 IRIs. 
+
 // NB uses punycoding rather than percent coding on domains
 
-const percentEncode = (url, options = { ascii:true }) => {
-  const r = {}, profile = profileFor (url)
-  for (const k in tags) if (url[k] != null) {
-    const v = url[k]
-    if (k === 'dirs') {
-      const _dirs = (r.dirs = [])
-      for (const x of v)
-        _dirs.push (pct.encode (x, profile.dir, options))
-    }
-    else if (k === 'host') {
-      // TODO use type flags to distinguish domains rather than this..
-      if (_isIp6 (v)) r[k] = v
-      else if (modeFor (url) & modes.special)
-        r[k] = options.ascii ? punycode.toASCII (v) : v
-      else r[k] = pct.encode (v, profile[k], options)
-    }
-    else r[k] = k in profile ? pct.encode (v, profile[k], options) : v
+const percentEncode = (url, spec = 'normal') => {
+
+  const r = { }
+  const mode = modeFor (url)
+  // TODO strictly speaking, IRI must encode more than URL
+  const unicode = spec === 'minimal' || spec === 'URL' || spec === 'IRI'
+  const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
+  const profile = spec === 'minimal' ? profiles.minimal
+    : spec === 'normal' ? profiles.normal
+    : profiles.valid
+
+  if (url.scheme != null)
+    r.scheme = url.scheme
+
+  for (const k of ['user', 'pass']) if (url[k] != null)
+    r[k] = encode (url[k], profile[k])
+
+  if (url.host != null) {
+    if (_isIp6 (url.host))
+      r.host = url.host
+    else if (mode & modes.special)
+      r.host = unicode ? url.host : punycode.toASCII (url.host)
+    else r.host = encode (url.host, profile.host)
   }
+
+  for (const k of ['port', 'drive', 'root']) if (url[k] != null)
+    r[k] = url[k]
+
+  let seg_esc = hasOpaquePath (url) ? sets.seg : profile.dir
+  if (mode & modes.special) seg_esc |= sets.special
+
+  if (url.dirs) {
+    r.dirs = []
+    for (const x of url.dirs)
+      r.dirs.push (encode (x, seg_esc))
+  }
+
+  if (url.file != null)
+    r.file = encode (url.file, seg_esc)
+
+  if (url.query != null) {
+    let query_esc = profile.query
+    if (spec !== 'minimal' && mode & modes.special) query_esc |= sets.quot
+    r.query = encode (url.query, query_esc)
+  }
+
+  if (url.hash != null)
+    r.hash = encode (url.hash, profile.hash)
+
   return r
 }
 
-const _decode = getProfile ({})
+// Percent decoding
+// TODO consider doing puny decoding as well
+
+const _dont = { scheme:1, port:1, drive:1, root:1 }
 const percentDecode = url => {
-  const r = {}
+  const r = { }
   for (let k in tags) if (url[k] != null)
-    r[k] = k === 'dirs' ? url[k] .map (pct.decode)
-      : k in _decode ? pct.decode (url[k])
-      : url[k]
+    r[k] = _dont [k] ? url[k]
+      : k === 'dirs' ? url[k] .map (pct.decode)
+      : pct.decode (url[k])
   return r
 }
 
@@ -270,23 +309,12 @@ const percentDecode = url => {
 const _isIp6 = str => 
   str != null && str[0] === '[' && str[str.length-1] === ']'
 
-const profileFor = (url, fallback) => {
-  const special = modeFor (url, fallback) & modes.special
-  const minimal = special ? false : hasOpaquePath (url)
-  return getProfile ({ minimal, special })
-}
-
-// TODO the WhatWG spec requires encoding all non-ASCII, but it makes sense to
-// make that configurable also in the URL Standard. 
-// It should be possible to create profiles that produce RFC 3986 URIs and
-// RFC 3987 IRIs. 
-
 
 // URL Printing
 // ------------
 
-const print = url => {
-  url = percentEncode (url)
+const print = (url, spec = 'minimal') => {
+  url = percentEncode (url, spec)
   // normalise for printing - prevent turning to an auth or root
   const authNorDrive  = url.host == null && url.drive == null
   const emptyFirstDir = url.dirs && url.dirs[0] === ''
@@ -461,10 +489,10 @@ function parseAuth (input, mode, percentCoded = true) {
     if (port != null && port.length) {
       port = +port
       if (port >= 2**16)
-        throw new Error ('ERR_INVALID_PORT') // 'Authority parser: Port out of bounds <'+input+'>')
+        throw new Error ('Authority parser: Port out of bounds <'+input+'>')
     }
   }
-  else throw new Error ('ERR_INVALID_AUTH') // 'Authority parser: Illegal authority <'+input+'>')
+  else throw new Error ('Authority parser: Illegal authority <'+input+'>')
 
   // TODO move to enforceConstraints?
   if ((user != null || port != null) && !host)
@@ -499,7 +527,7 @@ const WHATWGParseResolve = (input, base) => {
 // =======
 
 const version = '2.0.0-dev.1'
-const unstable = { utf8, pct, getProfile, isInSet }
+const unstable = { utf8, pct, PercentEncoder }
 
 export {
   version,
