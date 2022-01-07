@@ -272,9 +272,11 @@ const profileFor = (url, fallback) => {
 // ------------
 
 const print = url => {
-  const driveNorAuth = !url.drive && url.host == null
+  url = percentEncode (url)
+  // normalise for printing - prevent turning to an auth or root
+  const authNorDrive  = url.host == null && url.drive == null
   const emptyFirstDir = url.dirs && url.dirs[0] === ''
-  if (driveNorAuth && url.root && emptyFirstDir || !url.root && emptyFirstDir)
+  if (authNorDrive && emptyFirstDir)
     url = setProto ({ dirs: ['.'] .concat (url.dirs) }, url)
   return _print (url)
 }
