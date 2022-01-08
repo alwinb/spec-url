@@ -26,6 +26,10 @@ function parseHost (input, mode, percentCoded = true) {
       if (address != null)
         return ipv4.print (address)
 
+      // 'Ends in a number'
+      if (endsInNumber (r))
+        throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
+
       if (!r.length || (_nonhost.lastIndex = 0, _nonhost .test (r)))
         throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
 
@@ -34,6 +38,14 @@ function parseHost (input, mode, percentCoded = true) {
   }
   return input
 }
+
+// This is a quick regex, to catch up with the WHATWG standard,
+// but TODO clean this up and do it in a nice way
+
+function endsInNumber (str) {
+  return /(^|[.])([0-9]+|0[xX][0-9A-Fa-f]*)[.]?$/ .test (str)
+}
+
 
 // ### IDNA/ Nameprep
 // Just a small part for now. 

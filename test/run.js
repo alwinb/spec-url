@@ -1,4 +1,4 @@
-import { modeFor, parse, print, percentEncode, normalise, force, resolve, WHATWGParseResolve } from '../src/index.js'
+import { WHATWGParseResolve, print } from '../src/index.js'
 import Tests from './test-runner.js'
 import { readFile } from 'fs/promises'
 const log = console.log.bind (console)

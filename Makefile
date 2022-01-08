@@ -5,7 +5,7 @@ sources = $(addprefix src/, $(files))
 
 ## Actions
 
-all: dist/urllib.min.js
+all: dist/spec-url.min.js
 
 test: test/run/urltestdata.json
 	@ echo ""
@@ -19,9 +19,9 @@ clean: testclean distclean
 dist/:
 	@ mkdir dist/
 
-dist/urllib.min.js: dist/ $(sources)
+dist/spec-url.min.js: dist/ $(sources)
 	@ echo "Making a minified ES module bundle"
-	@ esbuild --bundle --format=esm --minify src/index.js > dist/specurl.min.js
+	@ esbuild --bundle --format=esm --minify src/index.js > dist/spec-url.min.js
 
 distclean:
 	@ test -d dist/ && echo "Removing dist/" && rm -r dist/ || exit 0

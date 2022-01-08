@@ -1,5 +1,5 @@
 import punycode from 'punycode'
-import { utf8, pct, getProfile, isInSet } from './pct.js'
+import { utf8, pct, encodeProfiles as profiles, PercentEncoder, encodeSets as sets } from './pct.js'
 import { parseHost, ipv4, ipv6 } from './host.js'
 const { setPrototypeOf:setProto, assign } = Object
 
@@ -19,7 +19,7 @@ const specials =
   { http:1, https:1, ws:1, wss:1, ftp:1, file:2 }
 
 const modeFor = ({ scheme }, fallback = modes.generic) =>
-  specials [low (scheme)] || fallback
+  scheme ? specials [low (scheme)] || modes.generic : fallback;
 
 const isFragment = url =>
   url.hash != null && ord (url) === ords.hash
@@ -66,20 +66,12 @@ const goto = (url1, url2) => {
 }
 
 
-// Base URLs
-// ---------
-
-const isBase = ({ scheme, host, drive, root }) => {
-  const mode = specials [low (scheme)] || modes.generic
-  return scheme &&
-    ( mode & modes.file ? host != null && (drive || root)
-    : mode & modes.web  ? host && root
-    : host != null || root ) // last one is WHATWG specific
-}
+// Forcing
+// -------
 
 class ForceError extends TypeError {
   constructor (url) {
-    super (`Cannot coerce ${print(url)} to a base-URL`)
+    super (`Cannot coerce <${print(url)}> to a base-URL`)
   }
 }
 
@@ -127,6 +119,11 @@ class ResolveError extends TypeError {
   }
 }
 
+// Opaque paths - WHATWG specific
+
+const hasOpaquePath = ({ scheme, host, root }) =>
+  host == null && root == null && modeFor ({ scheme }) === modes.generic
+
 // 'Strict' Reference Resolution according to RFC3986
 
 const genericResolve = (url1, url2) => {
@@ -149,10 +146,8 @@ const WHATWGResolve = (url1, url2) => {
   const mode = url1.scheme ? modeFor (url1) : modeFor (url2)
   if (mode & modes.special)
     return force (legacyResolve (url1, url2))
-  if (isBase (url2))
+  if (url1.scheme || isFragment (url1) || url2.host != null || url2.root)
     return genericResolve (url1, url2)
-  if (url2.scheme && (url1.scheme || isFragment (url1))) // opaque-path-resolve
-    return goto (url2, url1)
   else throw new ResolveError (url1, url2)
 }
 
@@ -177,7 +172,7 @@ const normalise = (url, coded = true) => {
 
   // ### Path segement normalisation
 
-  if (!isBase (url) && url.dirs)
+  if (hasOpaquePath (url) && url.dirs)
     r.dirs = r.dirs.slice ()
 
   else {
@@ -236,36 +231,75 @@ const dots = (seg, coded = true) =>
 // Percent Coding URLs
 // -------------------
 
+// The WHATWG standard encodes all non-ASCII, but it makes sense to
+// make that configurable also in my URL Specification. 
+// It is be possible to have profiles that produce RFC 3986 URIs and
+// RFC 3987 IRIs. 
+
 // NB uses punycoding rather than percent coding on domains
 
-const percentEncode = (url, options = { ascii:true }) => {
-  const r = {}, profile = profileFor (url)
-  for (const k in tags) if (url[k] != null) {
-    const v = url[k]
-    if (k === 'dirs') {
-      const _dirs = (r.dirs = [])
-      for (const x of v)
-        _dirs.push (pct.encode (x, profile.dir, options))
-    }
-    else if (k === 'host') {
-      // TODO use type flags to distinguish domains rather than this..
-      if (_isIp6 (v)) r[k] = v
-      else if (modeFor (url) & modes.special)
-        r[k] = options.ascii ? punycode.toASCII (v) : v
-      else r[k] = pct.encode (v, profile[k], options)
-    }
-    else r[k] = k in profile ? pct.encode (v, profile[k], options) : v
+const percentEncode = (url, spec = 'normal') => {
+
+  const r = { }
+  const mode = modeFor (url)
+  // TODO strictly speaking, IRI must encode more than URL
+  const unicode = spec === 'minimal' || spec === 'URL' || spec === 'IRI'
+  const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
+  const profile = spec === 'minimal' ? profiles.minimal
+    : spec === 'normal' ? profiles.normal
+    : profiles.valid
+
+  if (url.scheme != null)
+    r.scheme = url.scheme
+
+  for (const k of ['user', 'pass']) if (url[k] != null)
+    r[k] = encode (url[k], profile[k])
+
+  if (url.host != null) {
+    if (_isIp6 (url.host))
+      r.host = url.host
+    else if (mode & modes.special)
+      r.host = unicode ? url.host : punycode.toASCII (url.host)
+    else r.host = encode (url.host, profile.host)
   }
+
+  for (const k of ['port', 'drive', 'root']) if (url[k] != null)
+    r[k] = url[k]
+
+  let seg_esc = hasOpaquePath (url) ? sets.seg : profile.dir
+  if (mode & modes.special) seg_esc |= sets.special
+
+  if (url.dirs) {
+    r.dirs = []
+    for (const x of url.dirs)
+      r.dirs.push (encode (x, seg_esc))
+  }
+
+  if (url.file != null)
+    r.file = encode (url.file, seg_esc)
+
+  if (url.query != null) {
+    let query_esc = profile.query
+    if (spec !== 'minimal' && mode & modes.special) query_esc |= sets.quot
+    r.query = encode (url.query, query_esc)
+  }
+
+  if (url.hash != null)
+    r.hash = encode (url.hash, profile.hash)
+
   return r
 }
 
-const _decode = getProfile ({})
+// Percent decoding
+// TODO consider doing puny decoding as well
+
+const _dont = { scheme:1, port:1, drive:1, root:1 }
 const percentDecode = url => {
-  const r = {}
+  const r = { }
   for (let k in tags) if (url[k] != null)
-    r[k] = k === 'dirs' ? url[k] .map (pct.decode)
-      : k in _decode ? pct.decode (url[k])
-      : url[k]
+    r[k] = _dont [k] ? url[k]
+      : k === 'dirs' ? url[k] .map (pct.decode)
+      : pct.decode (url[k])
   return r
 }
 
@@ -275,25 +309,16 @@ const percentDecode = url => {
 const _isIp6 = str => 
   str != null && str[0] === '[' && str[str.length-1] === ']'
 
-const profileFor = (url, fallback) => {
-  const special = modeFor (url, fallback) & modes.special
-  const minimal = special ? false : !isBase (url)
-  return getProfile ({ minimal, special })
-}
-
-// TODO the WhatWG spec requires encoding all non-ASCII, but it makes sense to
-// make that configurable also in the URL Standard. 
-// It should be possible to create profiles that produce RFC 3986 URIs and
-// RFC 3987 IRIs. 
-
 
 // URL Printing
 // ------------
 
-const print = url => {
-  const driveNorAuth = !url.drive && url.host == null
+const print = (url, spec = 'minimal') => {
+  url = percentEncode (url, spec)
+  // normalise for printing - prevent turning to an auth or root
+  const authNorDrive  = url.host == null && url.drive == null
   const emptyFirstDir = url.dirs && url.dirs[0] === ''
-  if (driveNorAuth && url.root && emptyFirstDir || !url.root && emptyFirstDir)
+  if (authNorDrive && emptyFirstDir)
     url = setProto ({ dirs: ['.'] .concat (url.dirs) }, url)
   return _print (url)
 }
@@ -464,10 +489,10 @@ function parseAuth (input, mode, percentCoded = true) {
     if (port != null && port.length) {
       port = +port
       if (port >= 2**16)
-        throw new Error ('ERR_INVALID_PORT') // 'Authority parser: Port out of bounds <'+input+'>')
+        throw new Error ('Authority parser: Port out of bounds <'+input+'>')
     }
   }
-  else throw new Error ('ERR_INVALID_AUTH') // 'Authority parser: Illegal authority <'+input+'>')
+  else throw new Error ('Authority parser: Illegal authority <'+input+'>')
 
   // TODO move to enforceConstraints?
   if ((user != null || port != null) && !host)
@@ -487,14 +512,13 @@ function parseAuth (input, mode, percentCoded = true) {
 // ----------------------------------
 
 const WHATWGParseResolve = (input, base) => {
-  if (base == null) {
-    const resolved = force (parse (input))
-    return percentEncode (normalise (resolved))
+  let resolved;
+  if (base != null) {
+    const baseUrl = parse (base)
+    const url = parse (input, modeFor (baseUrl))
+    resolved = WHATWGResolve (url, baseUrl)
   }
-  const baseUrl = parse (base)
-  const baseMode = modeFor (baseUrl)
-  const url = parse (input, baseMode)
-  const resolved = WHATWGResolve (url, baseUrl)
+  else resolved = force (parse (input))
   return percentEncode (normalise (resolved))
 }
 
@@ -502,14 +526,14 @@ const WHATWGParseResolve = (input, base) => {
 // Exports
 // =======
 
-const version = '2.0.0-dev.1'
-const unstable = { utf8, pct, getProfile, isInSet }
+const version = '2.1.0-dev'
+const unstable = { utf8, pct, PercentEncoder }
 
 export {
   version,
   ords, ord, upto, goto, 
-  isBase, forceAsFileUrl, forceAsWebUrl, force, 
-  genericResolve, legacyResolve, WHATWGResolve, WHATWGResolve as resolve,
+  forceAsFileUrl, forceAsWebUrl, force, 
+  hasOpaquePath, genericResolve, legacyResolve, WHATWGResolve, WHATWGResolve as resolve,
   normalise, normalise as normalize,
   percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,

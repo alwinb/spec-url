@@ -42,19 +42,19 @@ Here, **dirs**, if present is an non-empty array of strings, and all other attri
 * upto (url, ord)
 * goto (url1, url2 [, options])
 
-### Base URLs
+### Forcing
 
-* isBase (url)
 * forceAsFileUrl (url)
 * forceAsWebUrl (url)
 * force (url)
 
 ### Reference Resolution
 
+* hasOpaquePath (url)
 * genericResolve (url1, url2) — RFC 3986 _strict_ resolution.
 * legacyResolve (url1, url2) — RFC 3986 _non-strict_ resolution.
-* WHATWGResolve (url1, url2) — WHATWG standard equivalent resolution.
-* resolve (url1, url2) — aka. WHATWGResolve
+* WHATWGResolve (url1, url2)
+* resolve (url1, url2) — aka. WHATWGResove
 
 ### Normalisation
 
@@ -104,7 +104,13 @@ There is a one-to-one correspondence between this representation and sequences o
 Changelog
 ---------
 
-### Version 2.0.0-dev.1 
+### Version 2.1.0-dev
+
+- Refactored the percent coding, making it possible to convert URL-objects to a valid URI (RFC3986), a _valid_ URL, or as specified by the WHATWG, to a normalised but potentially invalid URL.
+- Catching up with WHATWG changes: the host parser will now raise an error on domains that end in a number.
+- Removed the _isBase_ method in favour of an _hasOpaquePath_ method.
+
+### Version 2.0.0-dev.1
 
 - Changes to the API for forcing and reference resolution.
 - A fix for normalisation of opaque-path-URL that resulted in a difference in behaviour with the WHATWG Standard. 
