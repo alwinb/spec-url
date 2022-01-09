@@ -49,84 +49,6 @@ const utf8 = {
 }
 
 
-// Percent Encode Sets
-// -------------------
-
-// Bitflags used as IDs for percent encode sets
-
-const sets = {
-  special: 1, quot: 2, pct: 4,
-  user: 8, pass: 16, host: 32,
-  seg: 64, query: 128, hash:0,
-  valid_userinfo: 256,
-  valid_other: 512,
-  norm_userinfo: 1024,
-  norm_seg: 2048,
-  norm_query: 4096,
-  norm_hash: 8192
-} 
-
-// Lookup table for printable ascii codepoints,
-// starting at U+20 (space)
-
-const table = [
-  16160, 0, 16128, 8184,  768,    4,     0,    2,     0,     0,    0,
-      0, 0,     0,    0, 3448,    0,     0,    0,     0,     0,    0,
-      0, 0,     0,    0, 1320, 1024, 16160, 1024, 16160,  3448, 1312,
-      0, 0,     0,    0,    0,    0,     0,    0,     0,     0,    0,
-      0, 0,     0,    0,    0,    0,     0,    0,     0,     0,    0,
-      0, 0,     0,    0, 1824, 1825,  1824, 1824,     0, 12032,    0,
-      0, 0,     0,    0,    0,    0,     0,    0,     0,     0,    0,
-      0, 0,     0,    0,    0,    0,     0,    0,     0,     0,    0,
-      0, 0,     0, 3840, 1824, 3840,     0,    0
-]
-
-
-// Percent Encode Profiles
-// -----------------------
-
-// Bare minimum, this should maintain
-// print . parse = id, on preprocessed strings
-
-const minimal = {
-  user:  sets.user,
-  pass:  sets.pass,
-  host:  sets.host,
-  dir:   sets.seg,
-  file:  sets.seg,
-  query: sets.query,
-  hash:  sets.hash,
-}
-
-// Normal, this matches the WHATWG Standard.
-// NB this may generate invalid URL strings
-
-const normal = {
-  user:  sets.user  | sets.norm_userinfo,
-  pass:  sets.pass  | sets.norm_userinfo,
-  host:  sets.host  | sets.host,
-  dir:   sets.seg   | sets.norm_seg,
-  file:  sets.seg   | sets.norm_seg,
-  query: sets.query | sets.norm_query,
-  hash:  sets.hash  | sets.norm_hash,
-}
-
-// Valid, this generates valid URLs,
-// and valid URIs if in addition limited to ASCII. 
-
-const valid = {
-  user:  sets.user  | sets.valid_userinfo,
-  pass:  sets.pass  | sets.valid_userinfo,
-  host:  sets.host  | sets.valid_other,
-  dir:   sets.seg   | sets.valid_other,
-  file:  sets.seg   | sets.valid_other,
-  query: sets.query | sets.valid_other,
-  hash:  sets.hash  | sets.valid_other,
-}
-
-const encodeProfiles = { minimal, normal, valid }
-
-
 // Percent Coding
 // --------------
 // TODO change API / encodeSet arg
@@ -176,6 +98,135 @@ const _decode = input => {
     bytes[bytes.length] = parseInt (input.substr (i+1, 2), 16)
   return String.fromCodePoint (... utf8.decode (bytes))  
 }
+
+
+// Percent Encode Sets
+// -------------------
+
+// Bitflags used as IDs for percent encode sets
+
+const sets = {
+  c0c1: 1, nl_tab: 2,
+  special: 4, quot: 8, pct: 16,
+  user: 32, pass: 64, host: 128,
+  seg: 256, query: 512, hash: 0,
+  valid_userinfo: 1024,
+  valid_other: 2048,
+  norm_userinfo: 4096,
+  norm_seg: 8192,
+  norm_query: 16384,
+  norm_hash: 32768
+} 
+
+const table = [
+  1,     1,     1,     1,     1,     1,    1,     1,     1,    3,     3,
+  1,     1,     3,     1,     1,     1,    1,     1,     1,    1,     1,
+  1,     1,     1,     1,     1,     1,    1,     1,     1,    1, 64640,
+  0, 64512, 32736,  3072,    16,     0,    8,     0,     0,    0,     0,
+  0,     0,     0, 13792,     0,     0,    0,     0,     0,    0,     0,
+  0,     0,     0,  5280,  4096, 64640, 4096, 64640, 13792, 5248,     0,
+  0,     0,     0,     0,     0,     0,    0,     0,     0,    0,     0,
+  0,     0,     0,     0,     0,     0,    0,     0,     0,    0,     0,
+  0,     0,     0,  7296,  7300,  7296, 7296,     0, 48128,    0,     0,
+  0,     0,     0,     0,     0,     0,    0,     0,     0,    0,     0,
+  0,     0,     0,     0,     0,     0,    0,     0,     0,    0,     0,
+  0,     0, 15360,  7296, 15360,     0,    1,     1,     1,    1,     1,
+  1,     1,     1,     1,     1,     1,    1,     1,     1,    1,     1,
+  1,     1,     1,     1,     1,     1,    1,     1,     1,    1,     1,
+  1,     1,     1,     1,     1,     1
+]
+
+/*
+const charInfo // TODO
+  = cp < 0xA0 ? table [cp]
+  : (0xD800 <= cp && cp <= 0xDFFF) ? sets.surrogates
+  : (0xFDD0 <= cp && cp <= 0xFDEF) ? sets.nonchars
+  : ((cp >> 1) & 0x7FFF) === 0x7FFF) ? sets.nonchars
+  : unicode && 0xFF < cp ? 0 : -1
+//*/
+
+// Percent Encode Profiles
+// -----------------------
+
+// NB These are different from my URL Specification,
+// as I'm making changes both here and in the spec.
+
+const { c0c1, nl_tab, special:s } = sets
+
+// Minimal. Encodes only code-points that would cause reparse-bugs.
+// This may generate invalid - though parsable - URL strings.
+
+const minimal = {
+  name: 'minimal',
+  user:  nl_tab | sets.user,  // { # ? / : }
+  pass:  nl_tab | sets.pass,  // { # ? / }
+  host:  nl_tab | sets.host,  // { # ? / : @ } and { u+0 u+20 < > [ \ ] ^ | }
+  dir:   nl_tab | sets.seg,   // { # ? / }
+  file:  nl_tab | sets.seg,   // { # ? / }
+  query: nl_tab | sets.query, // { # }
+  hash:  nl_tab | sets.hash,  // { }
+}
+
+// Minimal Special 
+// Likewise, but also encodes "\" before the query.
+
+const minimal_special = {
+  name: 'minimal_special',
+  user:  nl_tab | sets.user  | s,
+  pass:  nl_tab | sets.pass  | s,
+  host:  nl_tab | sets.host  | s,
+  dir:   nl_tab | sets.seg   | s,
+  file:  nl_tab | sets.seg   | s,
+  query: nl_tab | sets.query,
+  hash:  nl_tab | sets.hash,
+}
+
+// Normal, this matches the WHATWG Standard.
+// May generate invalid - though parsable - URL strings.
+
+const normal = {
+  name: 'normal',
+  user:  c0c1 | sets.user  | sets.norm_userinfo,
+  pass:  c0c1 | sets.pass  | sets.norm_userinfo,
+  host:  c0c1 | sets.host  ,
+  dir:   c0c1 | sets.seg   | sets.norm_seg,
+  file:  c0c1 | sets.seg   | sets.norm_seg,
+  query: c0c1 | sets.query | sets.norm_query,
+  hash:  c0c1 | sets.hash  | sets.norm_hash,
+}
+
+// Normal Special 
+// Likewise, but also encodes "\" before the query
+// and "'" in the query
+
+const normal_special = {
+  name: 'normal_special',
+  user:  normal.user  | s,
+  pass:  normal.pass  | s,
+  host:  normal.host  | s,
+  dir:   normal.dir   | s,
+  file:  normal.file  | s,
+  query: normal.query | sets.quot,
+  hash:  normal.hash,
+}
+
+// Valid, this generates valid URL-strings, and
+// -- if limited to printable ASCII -- valid URIs. 
+
+const valid = {
+  name: 'valid',
+  user:  c0c1 | sets.user  | sets.valid_userinfo,
+  pass:  c0c1 | sets.pass  | sets.valid_userinfo,
+  host:  c0c1 | sets.host  | sets.valid_other,
+  dir:   c0c1 | sets.seg   | sets.valid_other,
+  file:  c0c1 | sets.seg   | sets.valid_other,
+  query: c0c1 | sets.query | sets.valid_other,
+  hash:  c0c1 | sets.hash  | sets.valid_other,
+}
+
+const encodeProfiles =
+  { minimal, minimal_special, normal, normal_special, valid }
+
 
 // Exports
 // =======

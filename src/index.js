@@ -230,44 +230,48 @@ const dots = (seg, coded = true) =>
 
 // Percent Coding URLs
 // -------------------
-
-// The WHATWG standard encodes all non-ASCII, but it makes sense to
-// make that configurable also in my URL Specification. 
-// It is be possible to have profiles that produce RFC 3986 URIs and
-// RFC 3987 IRIs. 
-
 // NB uses punycoding rather than percent coding on domains
 
 const percentEncode = (url, spec = 'normal') => {
-
   const r = { }
-  const mode = modeFor (url)
+  const mode = modeFor (url, modes.generic)
   // TODO strictly speaking, IRI must encode more than URL
   const unicode = spec === 'minimal' || spec === 'URL' || spec === 'IRI'
   const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
   const profile = spec === 'minimal' ? profiles.minimal
-    : spec === 'normal' ? profiles.normal
+    : spec === 'normal' ? (mode & modes.special ? profiles.normal_special : profiles.normal)
     : profiles.valid
 
   if (url.scheme != null)
     r.scheme = url.scheme
 
-  for (const k of ['user', 'pass']) if (url[k] != null)
-    r[k] = encode (url[k], profile[k])
+  if (url.user != null)
+    r.user = encode (url.user, profile.user)
+
+  if (url.pass != null)
+    r.pass = encode (url.pass, profile.pass)
 
   if (url.host != null) {
     if (_isIp6 (url.host))
       r.host = url.host
-    else if (mode & modes.special)
-      r.host = unicode ? url.host : punycode.toASCII (url.host)
-    else r.host = encode (url.host, profile.host)
+    else if (!unicode && mode & modes.special)
+      r.host = punycode.toASCII (url.host)
+    else
+      r.host = encode (url.host, profile.host)
   }
 
-  for (const k of ['port', 'drive', 'root']) if (url[k] != null)
-    r[k] = url[k]
+  if (url.port != null)
+    r.port = url.port
 
-  let seg_esc = hasOpaquePath (url) ? sets.seg : profile.dir
-  if (mode & modes.special) seg_esc |= sets.special
+  if (url.drive != null)
+    r.drive = url.drive
+
+  if (url.root)
+    r.root = '/'
+
+  // ... opaque paths
+  const seg_esc = mode === modes.generic && hasOpaquePath (url)
+    ? profiles.minimal.dir | sets.c0c1 : profile.dir
 
   if (url.dirs) {
     r.dirs = []
@@ -278,11 +282,8 @@ const percentEncode = (url, spec = 'normal') => {
   if (url.file != null)
     r.file = encode (url.file, seg_esc)
 
-  if (url.query != null) {
-    let query_esc = profile.query
-    if (spec !== 'minimal' && mode & modes.special) query_esc |= sets.quot
-    r.query = encode (url.query, query_esc)
-  }
+  if (url.query != null)
+    r.query = encode (url.query, profile.query)
 
   if (url.hash != null)
     r.hash = encode (url.hash, profile.hash)
