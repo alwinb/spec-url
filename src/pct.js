@@ -51,13 +51,14 @@ const utf8 = {
 
 // Percent Coding
 // --------------
-// TODO change API / encodeSet arg
 
 const pct = {
 
-  encode: (input, encodeSet = 0, { unicode = false, incremental = false }) => {
+  encode: (input, encodeSet = 0, { unicode = false, incremental = false } = { }) => {
     let coded = ''
-    if (!incremental) encodeSet |= sets.pct
+    if (!incremental)
+      encodeSet |= sets.pct
+
     for (let char of input) {
       let cp = char.codePointAt (0)
     
@@ -65,8 +66,14 @@ const pct = {
       if (0xD800 <= cp && cp <= 0xDBFF || 0xDC00 <= cp && cp <= 0xDFFF)
         cp = 0xFFFD
 
-      const escapeAscii = !unicode && (cp < 0x20 || cp > 0x7E)
-      if (escapeAscii || table [cp - 0x20] & encodeSet)
+      const escape
+        = cp < 0xA0 ? table [cp] & encodeSet // lookup table
+        : unicode ? 0xD800 <= cp && cp <= 0xDFFF // surrogate
+          || 0xFDD0 <= cp && cp <= 0xFDEF // non-char
+          || ((cp >> 1) & 0x7FFF) === 0x7FFF // non-char
+        : true
+
+      if (escape)
         for (let byte of utf8.encode (cp)) {
           let h1 = byte >> 4, h2 = byte & 0b1111
           h1 = (h1 < 10 ? 48 : 55) + h1 // single hex digit
@@ -84,9 +91,11 @@ const pct = {
 
 }
 
+// PercentEncoder
+// TODO change API / encodeSet arg
+
 function PercentEncoder (options = { }) {
   this.encode = (input, encodeSet) => pct.encode (input, encodeSet, options)
-  // this.decode = pct.decode
 }
 
 // private
