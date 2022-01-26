@@ -30,6 +30,47 @@ const low = str =>
   str ? str.toLowerCase () : str
 
 
+// ### Validation
+
+const errors = url => {
+  const errs = []
+
+  const fileMode
+    = url.scheme ? modeFor (url) === modes.file
+    : url.drive != null
+  
+  // the path-root constraint
+  if (!url.root && (url.host != null || url.drive) && (url.dirs || url.file))
+    errs.push (`A URL that has an authority or a drive, and a dir or a file, must have a path-root`)
+
+  // password implies username
+  if (url.user == null && url.pass != null)
+    errs.push (`A URL without a username cannot have a password`)
+
+  // drive implies file-mode
+  if (url.drive && !fileMode)
+    errs.push (`A non file-URL cannot have a drive`)
+
+  // port implies non file-URL with non-empty host
+  if (url.port != null)
+    if (fileMode) errs.push (`A file-URL cannot have a port`)
+    else if (!url.host) errs.push (`A URL without a host cannot have a port`)
+
+  // credentials imply non file-URL with non-empty host
+  if (url.user != null)
+    if (fileMode) errs.push (`A file-URL cannot have credentials`)
+    else if (!url.host) errs.push (`A URL without a host cannot have credentials`)
+
+  return errs.length ? errs : null
+}
+
+const warnings = url => {
+  // TODO
+  // test for invalid percent-escapes
+  // test for invalid codepoints
+}
+
+
 // Order, Upto and Goto operations
 // -------------------------------
 
@@ -566,6 +607,7 @@ const unstable = { utf8, pct, PercentEncoder }
 
 export {
   version,
+  errors, warnings,
   ords, ord, upto, goto, 
   forceAsFileUrl, forceAsWebUrl, force, 
   hasOpaquePath, genericResolve, legacyResolve, WHATWGResolve, WHATWGResolve as resolve,
