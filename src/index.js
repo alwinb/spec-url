@@ -572,6 +572,7 @@ export {
   modes, modeFor, parse, parseAuth, parseHost,
   WHATWGParseResolve,
   ipv4, ipv6,
-  print,
+  unsafePrint, print,
+  pathname, filePath,
   unstable
 }
