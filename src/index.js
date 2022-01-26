@@ -325,8 +325,9 @@ const print = (url, spec = 'minimal') => {
 
   // prevent accidentally producing an authority or a path-root
 
-  const authNorDrive  = url.host == null && url.drive == null
+  const authNorDrive = url.host == null && url.drive == null
   const emptyFirstDir = url.dirs && url.dirs[0] === ''
+
   if (authNorDrive && emptyFirstDir)
     url.dirs.unshift ('.')
 
@@ -339,22 +340,32 @@ const print = (url, spec = 'minimal') => {
   if (ord (url) === ords.file && (match = isSchemeLike.exec (url.file)))
     url.file = match[1] + '%3A' + match[2]
 
-  // prevent accidentally producing a drive
-  // TODO
+  // TODO prevent accidentally producing a drive
 
-  return _print (url)
+  return unsafePrint (url)
 }
 
-const _print = url => {
+// ### Printing the path of an URL
+
+const pathname = ({ drive, root, dirs, file }, spec) =>
+  print ({ drive, root, dirs, file }, spec)
+
+const filePath = ({ drive, root, dirs, file }) =>
+  unsafePrint (percentDecode ({ drive, root, dirs, file }))
+  // TODO consider throwing an error if a dir or a file contains '/'
+
+// ### Printing prepared URLs
+
+const unsafePrint = url => {
   let result = ''
-  const hasCreds = url.user != null
+  const hasCredentials = url.user != null
   for (const k in tags) if (url[k] != null) {
     const v = url[k]
     result +=
       k === 'scheme' ? ( v + ':') :
       k === 'user'   ? ('//' + v) :
       k === 'pass'   ? ( ':' + v) :
-      k === 'host'   ? ((hasCreds ? '@' : '//') + v) :
+      k === 'host'   ? ((hasCredentials ? '@' : '//') + v) :
       k === 'port'   ? (':' + v) :
       k === 'drive'  ? ('/' + v) :
       k === 'root'   ? ('/'    ) :
@@ -511,17 +522,17 @@ function parseAuth (input, mode, percentCoded = true) {
     if (port != null && port.length) {
       port = +port
       if (port >= 2**16)
-        throw new Error ('Authority parser: Port out of bounds <'+input+'>')
+        throw new Error (`Authority parser: Port out of bounds <${input}>`)
     }
   }
-  else throw new Error ('Authority parser: Illegal authority <'+input+'>')
+  else throw new Error (`Authority parser: Illegal authority <${input}>`)
 
   // TODO move to enforceConstraints?
   if ((user != null || port != null) && !host)
-    throw new Error ()
+    throw new Error (`An authority with an empty host cannot have credentials nor a port`)
 
   if (mode === modes.file && (user != null || port != null))
-    throw new Error ()
+    throw new Error (`An authority for a file-URL cannot have credentials`)
 
   host = parseHost (host, mode, percentCoded)
   const auth = { user, pass, host, port }
