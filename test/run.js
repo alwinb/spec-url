@@ -1,4 +1,5 @@
-import { parseResolve, print, pathname } from '../src/index.js'
+import * as url from '../src/index.js'
+const { parseResolve, print } = url
 import Tests from './test-runner.js'
 import { readFile } from 'fs/promises'
 const log = console.log.bind (console)
@@ -20,8 +21,8 @@ class WebTests extends Tests {
   compactOutput (output) { return output.href }
 }
 
-const file = await readFile ('test/run/urltestdata.json', { encoding: "utf8" })
-const fpath = parseResolve ('run/urltestdata.json', import.meta.url)
+const fpath = url.filePath (parseResolve ('run/urltestdata.json', import.meta.url))
+const file = await readFile (fpath, { encoding: "utf8" })
 const testDataRaw = JSON.parse (file)
 
 const testData = testDataRaw .map (test => {
