@@ -1,6 +1,6 @@
 {
   "name": "spec-url",
-  "version": "2.1.0-dev",
+  "version": "2.2.0-dev",
   "description": "URL library that implements a reference resolution algorithm for WHATWG URLs",
   "main": "src/index.js",
   "type": "module",

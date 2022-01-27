@@ -114,6 +114,15 @@ There is a one-to-one correspondence between this representation and sequences o
 Changelog
 ---------
 
+### Version 2.2.0-dev
+
+- Exports unsafePrint, pathname and filePath functions.
+- Exports parseResolve as an alias for WHATWGParseResolve.
+- Exports an errors (obj) functon to return a list of violated structural constraints, if any.
+- Catch up with WHATWG changes: C0-control and DEL codepoints are no longer allowed in domains.
+- Prevent reparse bugs for relative URLs that start with  a scheme-like dir or file component.
+- Fix a regression where non-character codepoints were not correctly percent encoded.
+
 ### Version 2.1.0-dev
 
 - Refactored the percent coding, making it possible to convert URL-objects to a valid URI (RFC3986), a _valid_ URL, or as specified by the WHATWG, to a normalised but potentially invalid URL.
