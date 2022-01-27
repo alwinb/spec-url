@@ -139,6 +139,8 @@ const forceAsWebUrl = url => {
       catch (e) { throw new ForceError (url) }
       if (dirs.length) url.dirs = dirs
       else delete url.dirs
+      const errs = authErrors (url)
+      if (errs) throw new ForceError (url)
     }
     else throw new ForceError (url)
   }
@@ -493,6 +495,11 @@ function parse (input, mode = modes.web) {
       else if (state & AUTH) {
         assign (url, parseAuth (buffer, mode, true)) // TODO API
         if (isSlash) url.root = '/'
+        const errs = authErrors (url, mode)
+        if (errs) {
+          const message = '\n\t- ' + errs.join ('\n\t- ') + '\n'
+          throw new Error (`Invalid URL-string <${input}> ${message}`)
+        }
       }
 
       else if (state === QUERY)
@@ -571,14 +578,6 @@ function parseAuth (input, mode, percentCoded = true) {
     }
   }
   else throw new Error (`Authority parser: Illegal authority <${input}>`)
-
-  // TODO move to enforceConstraints?
-  if ((user != null || port != null) && !host)
-    throw new Error (`An authority with an empty host cannot have credentials nor a port`)
-
-  if (mode === modes.file && (user != null || port != null))
-    throw new Error (`An authority for a file-URL cannot have credentials`)
-
   host = parseHost (host, mode, percentCoded)
   const auth = { user, pass, host, port }
   for (const k in auth) if (auth[k] == null) delete auth[k]
