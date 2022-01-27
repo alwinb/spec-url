@@ -2,6 +2,7 @@ import punycode from 'punycode'
 import { utf8, pct, encodeProfiles as profiles, PercentEncoder, encodeSets as sets } from './pct.js'
 import { parseHost, ipv4, ipv6 } from './host.js'
 const { setPrototypeOf:setProto, assign } = Object
+const log = console.log.bind (console)
 
 // URL Core
 // ========
@@ -168,8 +169,8 @@ class ResolveError extends TypeError {
 
 // Opaque paths - WHATWG specific
 
-const hasOpaquePath = ({ scheme, host, root }) =>
-  host == null && root == null && modeFor ({ scheme }) === modes.generic
+const hasOpaquePath = url =>
+  url.root == null && url.host == null && modeFor (url) === modes.generic
 
 // 'Strict' Reference Resolution according to RFC3986
 
@@ -608,14 +609,21 @@ const unstable = { utf8, pct, PercentEncoder }
 
 export {
   version,
+  
   errors,
+  modes, modeFor, 
+
   ords, ord, upto, goto, 
   forceAsFileUrl, forceAsWebUrl, force, 
-  hasOpaquePath, genericResolve, legacyResolve, WHATWGResolve, WHATWGResolve as resolve,
+  hasOpaquePath, genericResolve, legacyResolve,
+  WHATWGResolve, WHATWGResolve as resolve,
+
   normalise, normalise as normalize,
   percentEncode, percentDecode,
-  modes, modeFor, parse, parseAuth, parseHost,
+
+  parse, parseAuth, parseHost,
   WHATWGParseResolve, WHATWGParseResolve as parseResolve,
+
   ipv4, ipv6,
   unsafePrint, print,
   pathname, filePath,
