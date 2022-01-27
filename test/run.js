@@ -1,4 +1,4 @@
-import { WHATWGParseResolve, print } from '../src/index.js'
+import { parseResolve, print, pathname } from '../src/index.js'
 import Tests from './test-runner.js'
 import { readFile } from 'fs/promises'
 const log = console.log.bind (console)
@@ -7,7 +7,7 @@ const log = console.log.bind (console)
 // ---------------------------
 
 function runTest (test) {
-  const resolved = WHATWGParseResolve (test.input, test.base)
+  const resolved = parseResolve (test.input, test.base)
   resolved.href = print (resolved)
   return resolved
 }
@@ -21,6 +21,7 @@ class WebTests extends Tests {
 }
 
 const file = await readFile ('test/run/urltestdata.json', { encoding: "utf8" })
+const fpath = parseResolve ('run/urltestdata.json', import.meta.url)
 const testDataRaw = JSON.parse (file)
 
 const testData = testDataRaw .map (test => {

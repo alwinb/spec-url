@@ -570,7 +570,7 @@ export {
   normalise, normalise as normalize,
   percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,
-  WHATWGParseResolve,
+  WHATWGParseResolve, WHATWGParseResolve as parseResolve,
   ipv4, ipv6,
   unsafePrint, print,
   pathname, filePath,
