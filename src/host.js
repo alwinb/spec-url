@@ -6,8 +6,8 @@ const log = console.log.bind (console)
 // Host Processing
 // ===============
 
-const _nonhost =
-  /[\x00\x09\x0A\x0D\x20#%/:<>?@[\\\]^|]/g
+const _forbidden =
+  /[\x00-\x20#%/:<>?@[\\\]^|\x7F]/g
 
 function parseHost (input, mode, percentCoded = true) {
   if (input) {
@@ -30,7 +30,7 @@ function parseHost (input, mode, percentCoded = true) {
       if (endsInNumber (r))
         throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
 
-      if (!r.length || (_nonhost.lastIndex = 0, _nonhost .test (r)))
+      if (!r.length || (_forbidden.lastIndex = 0, _forbidden .test (r)))
         throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
 
       return r

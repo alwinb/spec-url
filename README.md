@@ -29,15 +29,21 @@ The library exposes a concise, low-level API for working with URL strings and UR
 
 ### URLs
 
-In this implementation URLs are modeled as plain JavaScript objects with the following _optional_ attributes:
+URLs are modeled as plain JavaScript objects with the following _optional_ attributes:
 
 * **scheme**, **user**, **pass**, **host**, **port**, **drive**, **root**, **dirs**, **file**, **query**, **hash**
 
-Here, **dirs**, if present is an non-empty array of strings, and all other attributes are strings. The string valued attributes are subject to the constraints as described in the specification.
+If present, **dirs** is an non-empty array of strings; all other attributes are strings. The string valued attributes are subject to the constraints as described in my [URL Specification].
+
+### Validation
+
+URL objects are also subject to structural constraints. The errors function returns a list of violations, if any. 
+
+* errors (obj)
 
 ### Goto
 
-* ords
+* ords — { scheme, auth, drive, root, dir, file, query, hash }
 * ord (url)
 * upto (url, ord)
 * goto (url1, url2 [, options])
@@ -54,7 +60,7 @@ Here, **dirs**, if present is an non-empty array of strings, and all other attri
 * genericResolve (url1, url2) — RFC 3986 _strict_ resolution.
 * legacyResolve (url1, url2) — RFC 3986 _non-strict_ resolution.
 * WHATWGResolve (url1, url2)
-* resolve (url1, url2) — aka. WHATWGResove
+* resolve (url1, url2) — aka. WHATWGResolve
 
 ### Normalisation
 
@@ -70,6 +76,9 @@ Here, **dirs**, if present is an non-empty array of strings, and all other attri
 * parseAuth (string [, mode])
 * parseHost (string [, mode])
 * print (url)
+* unsafePrint (url)
+* pathname (url)
+* filePath (url) — returns a filesystem–path-string
 
 ### Host processing
 
@@ -85,24 +94,34 @@ Here, **dirs**, if present is an non-empty array of strings, and all other attri
 ### Parse Resolve and Normalise
 
 * WHATWGParseResolve (string, base-string)
+* parseResolve (string, base-string) — aka. WHATWGParseResolve
 
 
 A Note - URL Objects
 --------------------
 
-The [URL Specification] models URLs as [ordered sequences of tokens][URL Model], "with at most one token per type, except for **dir** tokens, of which it may have any amount". Futhermore, the **username**, **password**, **host** and **port** are nested inside an **authority** token.
+The [URL Specification] models URLs as [ordered sequences of components][URL Model], "with at most one component per type, except for **dir** componens, of which it may have any amount". Futhermore, the **username**, **password**, **host** and **port** are nested inside an **authority** componen.
 
 This representation works well for the specification. But for implementations it makes sense to model URLs as records or objects instead. 
 
-In this this library URLs are modeled as plain JavaScript objects. The **dir** tokens, if present, are collected into a single **dirs** _array_, and the **authority**, if present, is expanded by setting any of its **user**, **pass**, **host** and **port** constituents directly on the url object itself. 
+In this this library URLs are modeled as plain JavaScript objects. The **dir** componens, if present, are collected into a single **dirs** _array_, and the **authority**, if present, is expanded by setting any of its **user**, **pass**, **host** and **port** constituents directly on the url object itself. 
 
-There is a one-to-one correspondence between this representation and sequences of tokens as defined in the URL specification.
+There is a one-to-one correspondence between this representation and sequences of componens as defined in the URL specification.
 
 [URL Model]: https://alwinb.github.io/url-specification/#url-model
 
 
 Changelog
 ---------
+
+### Version 2.2.0-dev
+
+- Exports unsafePrint, pathname and filePath functions.
+- Exports parseResolve as an alias for WHATWGParseResolve.
+- Exports an errors (obj) functon to return a list of violated structural constraints, if any.
+- Catch up with WHATWG changes: C0-control and DEL codepoints are no longer allowed in domains.
+- Prevent reparse bugs for relative URLs that start with  a scheme-like dir or file component.
+- Fix a regression where non-character codepoints were not correctly percent encoded.
 
 ### Version 2.1.0-dev
 
