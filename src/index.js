@@ -118,6 +118,7 @@ const goto = (url1, url2) => {
 class ForceError extends TypeError {
   constructor (url) {
     super (`Cannot coerce <${print(url)}> to a base-URL`)
+    this.url = url
   }
 }
 
@@ -125,6 +126,8 @@ const forceAsFileUrl = url => {
   url = assign ({ }, url)
   if (url.host == null) url.host = ''
   if (url.drive == null) url.root = '/'
+  if (url.user != null || url.pass != null || url.port != null)
+    throw new ForceError (url)
   return url
 }
 
