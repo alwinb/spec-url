@@ -1,6 +1,7 @@
 import punycode from 'punycode'
+import { parseAuth } from './auth.js'
+import { hostType, hostTypes, parseHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
 import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
-import { parseHost, ipv4, ipv6 } from './host.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
 
@@ -14,12 +15,12 @@ const ords =
   { scheme:1, auth:2, drive:3, root:4, dir:5, file:6, query:7, hash:8 }
 
 const modes =
-  { generic:0, web:1, file:2, special:3 }
+  { generic:1, noscheme:2, web:4, file:8, special:0b1100 }
 
 const specials =
-  { http:1, https:1, ws:1, wss:1, ftp:1, file:2 }
+  { http:4, https:4, ws:4, wss:4, ftp:4, file:8 }
 
-const modeFor = (url, fallback = modes.generic) =>
+const modeFor = (url, fallback = modes.noscheme) =>
   ( url.scheme ? specials [low (url.scheme)] || modes.generic
   : url.drive ? modes.file
   : fallback )
@@ -158,7 +159,7 @@ const forceAsWebUrl = url => {
 }
 
 const force = url => {
-  const mode = specials [low (url.scheme)] || modes.generic
+  const mode = modeFor (url)
   if (mode === modes.file) return forceAsFileUrl (url)
   else if (mode === modes.web) return forceAsWebUrl (url)
   else if (url.scheme) return url
@@ -256,7 +257,7 @@ const normalise = (url, coded = true) => {
 
   // ### Scheme-based authority normalisation
 
-  if (scheme === 'file' && r.host === 'localhost')
+  if (scheme === 'file' && isLocalHost (r.host))
     r.host = ''
 
   else if (url.port === 80 && (scheme === 'http' || scheme === 'ws'))
@@ -286,17 +287,23 @@ const dots = (seg, coded = true) =>
     || coded && low (seg) === '%2e%2e') ? 2 : 0
 
 
+const isLocalHost = host =>
+  host === 'localhost' ||
+  hostType (host) === hostTypes.domain && host.length === 1 && host[0] === 'localhost'
+
+
+
 // Percent Coding URLs
 // -------------------
 // NB uses punycoding rather than percent coding on domains
 
 const percentEncode = (url, spec = 'WHATWG') => {
   const r = { }
-  const mode = modeFor (url, modes.special)
 
   // TODO strictly speaking, IRI must encode more than URL
   // -- and in addition, URI and IRI should decode unreserved characters
   // -- and should not contain invalid percent encode sequences
+  const mode = modeFor (url)
 
   const unicode = spec in { minimal:1, URL:1, IRI:1 }
   const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
@@ -314,12 +321,13 @@ const percentEncode = (url, spec = 'WHATWG') => {
     r.pass = encode (url.pass, profile.pass)
 
   if (url.host != null) {
-    if (_isIp6 (url.host))
-      r.host = url.host
-    else if (!unicode && mode & modes.special)
-      r.host = punycode.toASCII (url.host)
-    else
-      r.host = encode (url.host, profile.host)
+    const t = hostType (url.host)    
+    r.host
+      = t === hostTypes.ipv6 ? [...url.host]
+      : t === hostTypes.ipv4 ? url.host
+      : t === hostTypes.domain ? (unicode ? [...url.host] : punyEncode (url.host))
+      : t === hostTypes.opaque ? encode (url.host, profile.host)
+      : url.host
   }
 
   if (url.port != null)
@@ -366,11 +374,6 @@ const percentDecode = url => {
   return r
 }
 
-
-// TODO design the ip4/ip6 host representation for the spec
-
-const _isIp6 = str => 
-  str != null && str[0] === '[' && str[str.length-1] === ']'
 
 
 // URL Printing
@@ -427,7 +430,7 @@ const unsafePrint = url => {
       k === 'scheme' ? ( v + ':') :
       k === 'user'   ? ('//' + v) :
       k === 'pass'   ? ( ':' + v) :
-      k === 'host'   ? ((hasCredentials ? '@' : '//') + v) :
+      k === 'host'   ? ((hasCredentials ? '@' : '//') + printHost (v)) :
       k === 'port'   ? (':' + v) :
       k === 'drive'  ? ('/' + v) :
       k === 'root'   ? ('/'    ) :
@@ -461,7 +464,7 @@ const isAlpha = c =>
 
 // ### URL Parsing
 
-function parse (input, mode = modes.web) {
+function parse (input, mode = modes.noscheme) {
   const url   = { }
   let state   = START|SCHEME
   let slashes = 0, letter = false, isDrive = false
@@ -565,40 +568,6 @@ function parse (input, mode = modes.web) {
   }
 
   return url
-}
-
-// ### Authority Parsing
-// (I am about to replace this with something more elegant)
-
-const raw = String.raw
-const group = _ => '(?:' + _ + ')'
-const opt   = _ => '(?:' + _ + ')?'
-const Rexp  = _ => new RegExp ('^' + _ + '$')
-
-const
-  port     = '[:]([0-9]*)',
-  user     = '([^:]*)',
-  pass     = '[:](.*)',
-  host     = raw `(\[[^\]]*\]|[^\0\t\n\r #/:<>?@[\\\]^|]*)`,
-  creds    = user + opt (pass) + '[@]',
-  authExp  = Rexp (opt (creds) + host + opt (port))
-
-function parseAuth (input, mode, percentCoded = true) {
-  let match, user, pass, host, port, _
-  if (input.length === 0) host = ''
-  else if ((match = authExp.exec (input))) {
-    [_, user, pass, host, port] = match
-    if (port != null && port.length) {
-      port = +port
-      if (port >= 2**16)
-        throw new Error (`Authority parser: Port out of bounds <${input}>`)
-    }
-  }
-  else throw new Error (`Authority parser: Illegal authority <${input}>`)
-  host = parseHost (host, mode, percentCoded)
-  const auth = { user, pass, host, port }
-  for (const k in auth) if (auth[k] == null) delete auth[k]
-  return auth
 }
 
 
