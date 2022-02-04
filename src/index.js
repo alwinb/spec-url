@@ -285,7 +285,8 @@ const dots = (seg, coded = true) =>
 
 const percentEncode = (url, spec = 'normal') => {
   const r = { }
-  const mode = modeFor (url, modes.generic)
+  const mode = modeFor (url, modes.special)
+
   // TODO strictly speaking, IRI must encode more than URL
   const unicode = spec === 'minimal' || spec === 'URL' || spec === 'IRI'
   const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
