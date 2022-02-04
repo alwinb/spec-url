@@ -1,5 +1,5 @@
 import punycode from 'punycode'
-import { utf8, pct, encodeProfiles as profiles, PercentEncoder, encodeSets as sets } from './pct.js'
+import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
 import { parseHost, ipv4, ipv6 } from './host.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
@@ -148,6 +148,8 @@ const forceAsWebUrl = url => {
     }
     else throw new ForceError (url)
   }
+  // TODO otherwise if the host is opaque,
+  // then parse it or fail otherwise
   url.root = '/'
   return url
 }
@@ -283,16 +285,19 @@ const dots = (seg, coded = true) =>
 // -------------------
 // NB uses punycoding rather than percent coding on domains
 
-const percentEncode = (url, spec = 'normal') => {
+const percentEncode = (url, spec = 'WHATWG') => {
   const r = { }
   const mode = modeFor (url, modes.special)
 
   // TODO strictly speaking, IRI must encode more than URL
-  const unicode = spec === 'minimal' || spec === 'URL' || spec === 'IRI'
+  // -- and in addition, URI and IRI should decode unreserved characters
+  // -- and should not contain invalid percent encode sequences
+
+  const unicode = spec in { minimal:1, URL:1, IRI:1 }
   const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
-  const profile = spec === 'minimal' ? profiles.minimal
-    : spec === 'normal' ? (mode & modes.special ? profiles.normal_special : profiles.normal)
-    : profiles.valid
+  const profile = (mode & modes.special) 
+    ? specialProfiles [spec] || specialProfiles.default
+    : profiles [spec] || profiles.default
 
   if (url.scheme != null)
     r.scheme = url.scheme
@@ -601,7 +606,7 @@ const WHATWGParseResolve = (input, base) => {
     resolved = WHATWGResolve (url, baseUrl)
   }
   else resolved = force (parse (input))
-  return percentEncode (normalise (resolved))
+  return percentEncode (normalise (resolved), 'WHATWG')
 }
 
 

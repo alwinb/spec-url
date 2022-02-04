@@ -160,13 +160,12 @@ const charInfo // TODO
 // NB These are different from my URL Specification,
 // as I'm making changes both here and in the spec.
 
-const { c0c1, nl_tab, special:s } = sets
+const { c0c1, nl_tab, special:s, quot:q } = sets
 
 // Minimal. Encodes only code-points that would cause reparse-bugs.
 // This may generate invalid - though parsable - URL strings.
 
 const minimal = {
-  name: 'minimal',
   user:  nl_tab | sets.user,  // { # ? / : }
   pass:  nl_tab | sets.pass,  // { # ? / }
   host:  nl_tab | sets.host,  // { # ? / : @ } and { u+0 u+20 < > [ \ ] ^ | }
@@ -176,17 +175,16 @@ const minimal = {
   hash:  nl_tab | sets.hash,  // { }
 }
 
-// Minimal Special 
+// Minimal Special
 // Likewise, but also encodes "\" before the query.
 
 const minimal_special = {
-  name: 'minimal_special',
   user:  nl_tab | sets.user  | s,
   pass:  nl_tab | sets.pass  | s,
   host:  nl_tab | sets.host  | s,
   dir:   nl_tab | sets.seg   | s,
   file:  nl_tab | sets.seg   | s,
-  query: nl_tab | sets.query,
+  query: nl_tab | sets.query | q,
   hash:  nl_tab | sets.hash,
 }
 
@@ -194,7 +192,6 @@ const minimal_special = {
 // May generate invalid - though parsable - URL strings.
 
 const normal = {
-  name: 'normal',
   user:  c0c1 | sets.user  | sets.norm_userinfo,
   pass:  c0c1 | sets.pass  | sets.norm_userinfo,
   host:  c0c1 | sets.host  ,
@@ -209,13 +206,12 @@ const normal = {
 // and "'" in the query
 
 const normal_special = {
-  name: 'normal_special',
   user:  normal.user  | s,
   pass:  normal.pass  | s,
   host:  normal.host  | s,
   dir:   normal.dir   | s,
   file:  normal.file  | s,
-  query: normal.query | sets.quot,
+  query: normal.query | q,
   hash:  normal.hash,
 }
 
@@ -223,7 +219,6 @@ const normal_special = {
 // -- if limited to printable ASCII -- valid URIs. 
 
 const valid = {
-  name: 'valid',
   user:  c0c1 | sets.user  | sets.valid_userinfo,
   pass:  c0c1 | sets.pass  | sets.valid_userinfo,
   host:  c0c1 | sets.host  | sets.valid_other,
@@ -233,11 +228,20 @@ const valid = {
   hash:  c0c1 | sets.hash  | sets.valid_other,
 }
 
-const encodeProfiles =
-  { minimal, minimal_special, normal, normal_special, valid }
+const profiles = {
+  default: valid,
+  WHATWG: normal,
+  minimal,
+}
+
+const specialProfiles = {
+  default: valid,
+  WHATWG: normal_special,
+  minimal: minimal_special,
+}
 
 
 // Exports
 // =======
 
-export { utf8, pct, sets as encodeSets, encodeProfiles, PercentEncoder }
+export { utf8, pct, sets as encodeSets, profiles, specialProfiles, PercentEncoder }
