@@ -1,8 +1,6 @@
+import { ipv4, ipv6 } from '../src/host.js'
+import * as assert from 'assert/strict'
 const log = console.log.bind (console)
-const { ipv4, ipv6 } = require ('../src/host')
-const assert = require ('assert').strict
-  assert.equals = assert.equal
-  assert.deepEquals = assert.deepEqual
 
 const head = s => {
   log ('\n' + s)
@@ -29,6 +27,7 @@ function testIp4 () {
   head ('Ipv4 examples')
   ip4Samples.forEach (s => log (
     ' >', s,
+    '\n=>', ipv4.parse (s),
     '\n=>', ipv4.normalise (s), '\n'
   ))
 }
@@ -62,7 +61,10 @@ function testIp6 () {
 
   ip6Samples.forEach (s => log (
     ' >', s,
-    '\n=>', normalise (s), '\n'
+    '\n=>',
+    parse (s),
+    '\n=>',
+    normalise (s), '\n'
   ))
 }
 

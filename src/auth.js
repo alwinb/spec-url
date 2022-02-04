@@ -1,4 +1,4 @@
-import { parseHost } from './host.js'
+import { parseHost, parseDomain, ipv6 } from './host.js'
 const log = console.log.bind (console)
 
 // ### Authority Parsing
@@ -44,12 +44,17 @@ function parseAuth (input, mode) {
       auth.user = str (0, c)
   }
 
-  auth.host = str (c + 1, p) //parseHost (str (c + 1, p), mode)
+  auth.host = parseHost (str (c + 1, p), mode)
   if (p < len) // has port
     auth.port = parsePort (str (p + 1))
 
+  if (auth.host == null)
+    throw new Error (`Invalid Authority-string: "${input}"`)
+
   return auth
 }
+
+// ### Port
 
 const parsePort = input => {
   if (input === '') return input
