@@ -31,6 +31,7 @@ const low = str =>
   str ? str.toLowerCase () : str
 
 
+
 // Validation
 // ----------
 
@@ -74,6 +75,7 @@ const authErrors = (auth, mode = modes.generic) => {
 }
 
 
+
 // Order, Upto and Goto operations
 // -------------------------------
 
@@ -110,6 +112,7 @@ const goto = (url1, url2) => {
     r.root = '/'
   return r
 }
+
 
 
 // Forcing
@@ -163,6 +166,7 @@ const force = url => {
 }
 
 
+
 // Reference Resolution
 // --------------------
 
@@ -203,6 +207,7 @@ const WHATWGResolve = (url1, url2) => {
     return genericResolve (url1, url2)
   else throw new ResolveError (url1, url2)
 }
+
 
 
 // Normalisation
@@ -435,6 +440,7 @@ const unsafePrint = url => {
 }
 
 
+
 // URL Parsing
 // -----------
 
@@ -562,6 +568,7 @@ function parse (input, mode = modes.web) {
 }
 
 // ### Authority Parsing
+// (I am about to replace this with something more elegant)
 
 const raw = String.raw
 const group = _ => '(?:' + _ + ')'
@@ -595,6 +602,7 @@ function parseAuth (input, mode, percentCoded = true) {
 }
 
 
+
 // WHATWG Parse Resolve and Normalise
 // ----------------------------------
 
@@ -608,6 +616,7 @@ const WHATWGParseResolve = (input, base) => {
   else resolved = force (parse (input))
   return percentEncode (normalise (resolved), 'WHATWG')
 }
+
 
 
 // Exports
