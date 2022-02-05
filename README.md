@@ -33,7 +33,10 @@ URLs are modeled as plain JavaScript objects with the following _optional_ attri
 
 * **scheme**, **user**, **pass**, **host**, **port**, **drive**, **root**, **dirs**, **file**, **query**, **hash**
 
-If present, **dirs** is an non-empty array of strings; all other attributes are strings. The string valued attributes are subject to the constraints as described in my [URL Specification].
+If present, **dirs** is an non-empty array of strings; **host** is a _host_ (see below) and all other attributes are strings. The string valued attributes are subject to the constraints as described in my [URL Specification].
+
+A Host is either an ipv4 address, an ipv6 address, a domain, or an opaque host. In spec-url these are modeled as a number, an array of numbers, an array of domain-label strings, or a plain string, respectively. 
+
 
 ### Validation
 
@@ -68,19 +71,23 @@ URL objects are also subject to structural constraints. The errors function retu
 * percentEncode (url)
 * percentDecode (url)
 
-### Parsing and Printing
+### Parsing
 
-* modes — { generic, web, file }
+* modes — { generic, web, file, noscheme }
 * modeFor (url, fallback)
 * parse (string [, mode])
 * parseAuth (string [, mode])
 * parseHost (string [, mode])
+
+### Printing
+
 * print (url)
-* unsafePrint (url)
+* printHost (host)
 * pathname (url)
 * filePath (url) — returns a filesystem–path-string
+* unsafePrint (url)
 
-### Host processing
+### Host Parsing
 
 * ipv4
   * parse (string)
