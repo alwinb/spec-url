@@ -1,15 +1,15 @@
 .PHONY: all test clean update testclean distclean
 
-files = host.js index.js pct.js
+files = host.mjs index.mjs pct.mjs
 sources = $(addprefix src/, $(files))
 
 ## Actions
 
-all: dist/urllib.min.js
+all: dist/spec-url.mjs dist/spec-url.js
 
 test: test/run/urltestdata.json
 	@ echo ""
-	@ node test/run.js
+	@ node test/run.mjs
 	@ echo ""
 
 clean: testclean distclean
@@ -19,9 +19,13 @@ clean: testclean distclean
 dist/:
 	@ mkdir dist/
 
-dist/urllib.min.js: dist/ $(sources)
-	@ echo "Making a minified ES module bundle"
-	@ esbuild --bundle --format=esm --minify src/index.js > dist/specurl.min.js
+dist/spec-url.js: dist/ $(sources) Makefile
+	@ echo "Making a minified CommonJS bundle"
+	@ esbuild --bundle --platform=node --minify --keep-names src/index.mjs > dist/spec-url.js
+
+dist/spec-url.mjs: dist/ $(sources) Makefile
+	@ echo "Making a minified ES Module"
+	@ esbuild --bundle --format=esm --minify --keep-names src/index.mjs > dist/spec-url.mjs
 
 distclean:
 	@ test -d dist/ && echo "Removing dist/" && rm -r dist/ || exit 0

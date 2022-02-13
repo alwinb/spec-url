@@ -1,4 +1,4 @@
-import { pct } from './pct.js'
+import { pct } from './pct.mjs'
 import punycode from 'punycode'
 const log = console.log.bind (console)
 
@@ -6,8 +6,8 @@ const log = console.log.bind (console)
 // Host Processing
 // ===============
 
-const _nonhost =
-  /[\x00\x09\x0A\x0D\x20#%/:<>?@[\\\]^|]/g
+const _forbidden =
+  /[\x00-\x20#%/:<>?@[\\\]^|\x7F]/g
 
 function parseHost (input, mode, percentCoded = true) {
   if (input) {
@@ -26,7 +26,11 @@ function parseHost (input, mode, percentCoded = true) {
       if (address != null)
         return ipv4.print (address)
 
-      if (!r.length || (_nonhost.lastIndex = 0, _nonhost .test (r)))
+      // 'Ends in a number'
+      if (endsInNumber (r))
+        throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
+
+      if (!r.length || (_forbidden.lastIndex = 0, _forbidden .test (r)))
         throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
 
       return r
@@ -34,6 +38,14 @@ function parseHost (input, mode, percentCoded = true) {
   }
   return input
 }
+
+// This is a quick regex, to catch up with the WHATWG standard,
+// but TODO clean this up and do it in a nice way
+
+function endsInNumber (str) {
+  return /(^|[.])([0-9]+|0[xX][0-9A-Fa-f]*)[.]?$/ .test (str)
+}
+
 
 // ### IDNA/ Nameprep
 // Just a small part for now. 

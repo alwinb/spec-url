@@ -1,5 +1,5 @@
-import { modeFor, parse, print, percentEncode, normalise, force, resolve, forceResolve, WHATWGParseResolve } from '../src/index.js'
-import Tests from './test-runner.js'
+import { parseResolve, print, pathname, version } from 'spec-url'
+import Tests from './test-runner.mjs'
 import { readFile } from 'fs/promises'
 const log = console.log.bind (console)
 
@@ -7,7 +7,7 @@ const log = console.log.bind (console)
 // ---------------------------
 
 function runTest (test) {
-  const resolved = WHATWGParseResolve (test.input, test.base)
+  const resolved = parseResolve (test.input, test.base)
   resolved.href = print (resolved)
   return resolved
 }
@@ -21,6 +21,7 @@ class WebTests extends Tests {
 }
 
 const file = await readFile ('test/run/urltestdata.json', { encoding: "utf8" })
+const fpath = parseResolve ('run/urltestdata.json', import.meta.url)
 const testDataRaw = JSON.parse (file)
 
 const testData = testDataRaw .map (test => {
@@ -46,4 +47,5 @@ const testSet = new WebTests (testData, runTest)
 log ('      Web Platform URL Tests      ')
 log ('==================================')
 const ok = testSet.run ()
+log (`\nspec-url ${version}\n`)
 process.exit (ok ? 0 : 1)

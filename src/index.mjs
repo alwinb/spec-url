@@ -1,6 +1,6 @@
 import punycode from 'punycode'
-import { utf8, pct, getProfile, isInSet } from './pct.js'
-import { parseHost, ipv4, ipv6 } from './host.js'
+import { utf8, pct, getProfile, isInSet } from './pct.mjs'
+import { parseHost, ipv4, ipv6 } from './host.mjs'
 const { setPrototypeOf:setProto, assign } = Object
 
 // URL Core
@@ -19,15 +19,13 @@ const specials =
   { http:1, https:1, ws:1, wss:1, ftp:1, file:2 }
 
 const modeFor = ({ scheme }, fallback = modes.generic) =>
-  specials [low (scheme)] || fallback
+  scheme ? specials [low (scheme)] || modes.generic : fallback;
 
 const isBase = ({ scheme, host, root }) =>
   scheme != null && (host != null || root != null)
 
-const isResolved = url => {
-  const o = ord (url)
-  return o === ords.scheme || o === ords.hash && url.hash != null
-}
+const isResolved = url =>
+  ord (url) === ords.scheme
 
 const low = str =>
   str ? str.toLowerCase () : str
@@ -36,13 +34,9 @@ const low = str =>
 // Reference Resolution
 // --------------------
 
-const tags = { 
-  scheme:1,
-  user:2, pass:2,
-  host:2, port:2,
-  drive:3,
-  root:4, dirs:5, file:6,
-  query:7, hash:8
+const tags = {
+  scheme:1, user:2, pass:2, host:2, port:2, drive:3,
+  root:4, dirs:5, file:6, query:7, hash:8
 }
 
 const ord = url => {
@@ -92,13 +86,13 @@ const strictGoto = (url1, url2) => {
 // ### Resolution Operations
 
 const preResolve = (url1, url2, options) =>
-  isBase (url2) || ord (url1) === ords.hash
+  isBase (url2) || ord (url1) === ords.hash && url1.hash != null
     ? goto (url2, url1, options)
     : url1
 
 const resolve = (url1, url2, options) => {
-  const r = preResolve (url1, url2, options), o = ord (r)
-  if (o === ords.scheme || o === ords.hash && r.hash != null) return r
+  const r = preResolve (url1, url2, options)
+  if (r.scheme) return r
   else throw new Error (`Failed to resolve <${print(url1)}> against <${print(url2)}>`)
 }
 
@@ -142,7 +136,7 @@ const forceResolve = (url1, url2, options) =>
 
 // Normalisation
 // -------------
-  
+
 const normalise = (url, coded = true) => {
 
   const r = assign ({}, url)
@@ -160,19 +154,24 @@ const normalise = (url, coded = true) => {
 
   // ### Path segement normalisation
 
-  const dirs = []
-  for (const x of r.dirs||[]) {
-    const isDots = dots (x, coded)
-    if (isDots === 2) dirs.pop ()
-    else if (!isDots) dirs.push (x)
+  if (!isBase (url) && url.dirs)
+    r.dirs = r.dirs.slice ()
+
+  else {
+    const dirs = []
+    for (const x of r.dirs||[]) {
+      const isDots = dots (x, coded)
+      if (isDots === 2) dirs.pop ()
+      else if (!isDots) dirs.push (x)
+    }
+    if (r.file) {
+      const isDots = dots (r.file, coded)
+      if (isDots === 2) dirs.pop ()
+      if (isDots) delete r.file
+    }
+    if (dirs.length) r.dirs = dirs
+    else delete r.dirs
   }
-  if (r.file) {
-    const isDots = dots (r.file, coded)
-    if (isDots === 2) dirs.pop ()
-    if (isDots) delete r.file
-  }
-  if (dirs.length) r.dirs = dirs
-  else delete r.dirs
 
   // ### Drive letter normalisation
 
@@ -268,24 +267,54 @@ const profileFor = (url, fallback) => {
 // URL Printing
 // ------------
 
-const print = url => {
-  const driveNorAuth = !url.drive && url.host == null
+const isSchemeLike =
+  /^([a-zA-Z][a-zA-Z+\-.]*):(.*)$/
+
+const isDriveLike = 
+  /^([a-zA-Z])(:||)$/
+
+const print = (url) => {
+  url = percentEncode (url)
+
+  // prevent accidentally producing an authority or a path-root
+
+  const authNorDrive  = url.host == null && url.drive == null
   const emptyFirstDir = url.dirs && url.dirs[0] === ''
-  if (driveNorAuth && url.root && emptyFirstDir || !url.root && emptyFirstDir)
-    url = setProto ({ dirs: ['.'] .concat (url.dirs) }, url)
-  return _print (url)
+
+  if (authNorDrive && emptyFirstDir)
+    url.dirs.unshift ('.')
+
+  // prevent accidentally producing a scheme
+
+  let match
+  if (ord (url) === ords.dir && (match = isSchemeLike.exec (url.dirs[0])))
+    url.dirs[0] = match[1] + '%3A' + match[2]
+
+  if (ord (url) === ords.file && (match = isSchemeLike.exec (url.file)))
+    url.file = match[1] + '%3A' + match[2]
+
+  // TODO prevent accidentally producing a drive
+
+  return unsafePrint (url)
 }
 
-const _print = url => {
+// ### Printing the path of an URL
+
+const pathname = ({ drive, root, dirs, file }, spec) =>
+  print ({ drive, root, dirs, file }, spec)
+
+// ### Printing prepared URLs
+
+const unsafePrint = url => {
   let result = ''
-  const hasCreds = url.user != null
+  const hasCredentials = url.user != null
   for (const k in tags) if (url[k] != null) {
     const v = url[k]
     result +=
       k === 'scheme' ? ( v + ':') :
       k === 'user'   ? ('//' + v) :
       k === 'pass'   ? ( ':' + v) :
-      k === 'host'   ? ((hasCreds ? '@' : '//') + v) :
+      k === 'host'   ? ((hasCredentials ? '@' : '//') + v) :
       k === 'port'   ? (':' + v) :
       k === 'drive'  ? ('/' + v) :
       k === 'root'   ? ('/'    ) :
@@ -442,17 +471,17 @@ function parseAuth (input, mode, percentCoded = true) {
     if (port != null && port.length) {
       port = +port
       if (port >= 2**16)
-        throw new Error ('ERR_INVALID_PORT') // 'Authority parser: Port out of bounds <'+input+'>')
+        throw new Error (`Authority parser: Port out of bounds <${input}>`)
     }
   }
-  else throw new Error ('ERR_INVALID_AUTH') // 'Authority parser: Illegal authority <'+input+'>')
+  else throw new Error (`Authority parser: Illegal authority <${input}>`)
 
   // TODO move to enforceConstraints?
   if ((user != null || port != null) && !host)
-    throw new Error ()
+    throw new Error (`An authority with an empty host cannot have credentials nor a port`)
 
   if (mode === modes.file && (user != null || port != null))
-    throw new Error ()
+    throw new Error (`An authority for a file-URL cannot have credentials`)
 
   host = parseHost (host, mode, percentCoded)
   const auth = { user, pass, host, port }
@@ -468,15 +497,17 @@ const WHATWGParseResolve = (input, base) => {
   const baseUrl = parse (base)
   const baseMode = modeFor (baseUrl)
   const url = parse (input, baseMode)
-  const strict = modeFor (url, baseMode) === modes.generic
-  return percentEncode (normalise (forceResolve (url, baseUrl, { strict })))
+  const resolved = modeFor (url, baseMode) === modes.generic
+    ? resolve (url, baseUrl, { strict:true })
+    : force (resolve (url, force (baseUrl)), { strict:false })
+  return percentEncode (normalise (resolved))
 }
 
 
 // Exports
 // =======
 
-const version = '1.4.0'
+const version = '1.5.0'
 const unstable = { utf8, pct, getProfile, isInSet }
 
 export {
@@ -487,8 +518,9 @@ export {
   normalise, normalise as normalize,
   percentEncode, percentDecode,
   modes, modeFor, parse, parseAuth, parseHost,
-  WHATWGParseResolve,
+  WHATWGParseResolve, WHATWGParseResolve as parseResolve,
   ipv4, ipv6,
-  print,
+  unsafePrint, print,
+  pathname,
   unstable
 }
