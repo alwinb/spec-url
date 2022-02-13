@@ -1,4 +1,4 @@
-import { parseResolve, print, pathname } from 'spec-url'
+import { parseResolve, print, pathname, version } from 'spec-url'
 import Tests from './test-runner.mjs'
 import { readFile } from 'fs/promises'
 const log = console.log.bind (console)
@@ -47,4 +47,5 @@ const testSet = new WebTests (testData, runTest)
 log ('      Web Platform URL Tests      ')
 log ('==================================')
 const ok = testSet.run ()
+log (`\nspec-url ${version}\n`)
 process.exit (ok ? 0 : 1)
