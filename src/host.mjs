@@ -1,4 +1,4 @@
-import { pct } from './pct.js'
+import { pct } from './pct.mjs'
 import punycode from 'punycode'
 const log = console.log.bind (console)
 

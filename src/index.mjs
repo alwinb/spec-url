@@ -1,6 +1,6 @@
 import punycode from 'punycode'
-import { utf8, pct, getProfile, isInSet } from './pct.js'
-import { parseHost, ipv4, ipv6 } from './host.js'
+import { utf8, pct, getProfile, isInSet } from './pct.mjs'
+import { parseHost, ipv4, ipv6 } from './host.mjs'
 const { setPrototypeOf:setProto, assign } = Object
 
 // URL Core

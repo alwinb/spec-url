@@ -1,5 +1,5 @@
-import { parseResolve, print, pathname } from '../src/index.js'
-import Tests from './test-runner.js'
+import { parseResolve, print, pathname } from 'spec-url'
+import Tests from './test-runner.mjs'
 import { readFile } from 'fs/promises'
 const log = console.log.bind (console)
 

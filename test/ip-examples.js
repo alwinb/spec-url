@@ -1,5 +1,5 @@
 const log = console.log.bind (console)
-const { ipv4, ipv6 } = require ('../src/host')
+const { ipv4, ipv6 } = require ('spec-url')
 const assert = require ('assert').strict
   assert.equals = assert.equal
   assert.deepEquals = assert.deepEqual
