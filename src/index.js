@@ -34,13 +34,9 @@ const low = str =>
 // Reference Resolution
 // --------------------
 
-const tags = { 
-  scheme:1,
-  user:2, pass:2,
-  host:2, port:2,
-  drive:3,
-  root:4, dirs:5, file:6,
-  query:7, hash:8
+const tags = {
+  scheme:1, user:2, pass:2, host:2, port:2, drive:3,
+  root:4, dirs:5, file:6, query:7, hash:8
 }
 
 const ord = url => {
@@ -271,13 +267,34 @@ const profileFor = (url, fallback) => {
 // URL Printing
 // ------------
 
-const print = url => {
+const isSchemeLike =
+  /^([a-zA-Z][a-zA-Z+\-.]*):(.*)$/
+
+const isDriveLike = 
+  /^([a-zA-Z])(:||)$/
+
+const print = (url) => {
   url = percentEncode (url)
-  // normalise for printing - prevent turning to an auth or root
+
+  // prevent accidentally producing an authority or a path-root
+
   const authNorDrive  = url.host == null && url.drive == null
   const emptyFirstDir = url.dirs && url.dirs[0] === ''
   if (authNorDrive && emptyFirstDir)
-    url = setProto ({ dirs: ['.'] .concat (url.dirs) }, url)
+    url.dirs.unshift ('.')
+
+  // prevent accidentally producing a scheme
+
+  let match
+  if (ord (url) === ords.dir && (match = isSchemeLike.exec (url.dirs[0])))
+    url.dirs[0] = match[1] + '%3A' + match[2]
+
+  if (ord (url) === ords.file && (match = isSchemeLike.exec (url.file)))
+    url.file = match[1] + '%3A' + match[2]
+
+  // prevent accidentally producing a drive
+  // TODO
+
   return _print (url)
 }
 
