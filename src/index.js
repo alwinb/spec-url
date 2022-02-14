@@ -57,18 +57,19 @@ const errors = url => {
 
 const authErrors = (auth, mode = modes.generic) => {
   const errs = []
+  const hasNoHost = auth.host == null || auth.host === ''
 
   if (auth.port != null)
     if (mode & modes.file) errs.push (`A file-URL cannot have a port`)
-    else if (!auth.host) errs.push (`A URL without a host cannot have a port`)
+    else if (hasNoHost) errs.push (`A URL without a host cannot have a port`)
 
   if (auth.user != null || auth.pass != null)
     if (mode & modes.file) errs.push (`A file-URL cannot have credentials`)
-    else if (!auth.host) errs.push (`A URL without a host cannot have credentials`)
+    else if (hasNoHost) errs.push (`A URL without a host cannot have credentials`)
 
   if (auth.pass != null && auth.user == null)
     errs.push (`A URL without a username cannot have a password`)
-  
+
   // NB I do allow web-URLs to have an empty host
   // This is however is *not* allowed for *resolved* web-URLs.
   
@@ -137,25 +138,27 @@ const forceAsFileUrl = url => {
 
 const forceAsWebUrl = url => {
   url = assign ({ }, url)
-  if (!url.host) {
-    let str = url.host
-    const dirs = url.dirs ? url.dirs.slice () : []
-    while (!str && dirs.length) str = dirs.shift ()
-    if (!str) { str = url.file; delete url.file }
-    if (str) {
-      try { assign (url, parseAuth (str, modes.web)) }
-      catch (e) { throw new ForceError (url) }
-      if (dirs.length) url.dirs = dirs
-      else delete url.dirs
-      const errs = authErrors (url)
-      if (errs) throw new ForceError (url)
+  try { 
+
+    if (url.host == null || url.host === '') {
+      const match = _firstNonEmptySegment (url)
+      const auth = parseAuth (match.value)
+      if (auth.host === '') throw null
+      assign (url, auth)
+      _removeSegments (url, match)
     }
-    else throw new ForceError (url)
+
+    if (typeof url.host === 'string') {
+      const host = parseHost (url.host, modes.web)
+      if (!host) throw null
+      else url.host = host
+    }
+
+    url.root = '/'
+    return url
   }
-  // TODO otherwise if the host is opaque,
-  // then parse it or fail otherwise
-  url.root = '/'
-  return url
+  catch (e) {
+  throw new ForceError (url) }
 }
 
 const force = url => {
@@ -166,6 +169,27 @@ const force = url => {
   else throw new ForceError (url)
 }
 
+// Utils
+
+const _firstNonEmptySegment = url => {
+  const dirs = url.dirs || []
+  for (let i=0, l=dirs.length; i<l;i++) if (dirs[i])
+    return { value:dirs[i], ord:ords.dir, index:i }
+  if (url.file)
+    return { value:url.file, ord:ords.file }
+  throw null // not found
+}
+
+const _removeSegments = (url, match) => {
+  if (match.ord === ords.dir) {
+    const dirs_ = url.dirs.slice (match.index + 1)
+    if (dirs_.length) url.dirs = dirs_
+    else delete url.dirs
+  }
+  else if (match.ord === ords.file)
+    delete url.file
+  return url
+}
 
 
 // Reference Resolution
