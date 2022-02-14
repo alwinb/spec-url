@@ -81,21 +81,21 @@ const upto = (url, ord) => {
   return r
 }
 
-const goto = (url1, url2) => {
-  const r = upto (url1, ord (url2))
+const rebase = (url, base) => {
+  const r = upto (base, ord (url))
   for (const k in tags)
-    if (url2[k] == null) continue
+    if (url[k] == null) continue
     else if (k === 'dirs')
-      r.dirs = [...(r.dirs||[]), ...url2.dirs]
-    else r[k] = url2[k]
+      r.dirs = (r.dirs || []) .concat (url.dirs)
+    else r[k] = url[k]
   // Patch up root if needed
   if ((r.host != null || r.drive) && (r.dirs || r.file))
     r.root = '/'
   return r
 }
 
-const rebase = (url, base) =>
-  goto (base, url)
+const goto = (base, url) =>
+  rebase (url, base)
 
 
 // Forcing
@@ -189,29 +189,29 @@ const hasOpaquePath = url =>
 
 // 'Strict' Reference Resolution according to RFC3986
 
-const genericResolve = (url1, url2) => {
-  if (url1.scheme || url2.scheme) return goto (url2, url1)
+const genericResolve = (url, base) => {
+  if (url.scheme || base.scheme) return rebase (url, base)
   else throw new ResolveError (url1, url2)
 }
 
 // 'Non-strict' Reference Resolution according to RFC3986
 
-const legacyResolve = (url1, url2) => {
-  if (url1.scheme && low (url1.scheme) === low (url2.scheme))
-    ( url2 = setProto ({ scheme:url1.scheme }, url2)
-    , url1 = setProto ({ scheme:null }, url1) )
-  return genericResolve (url1, url2)
+const legacyResolve = (url, base) => {
+  if (url.scheme && low (url.scheme) === low (base.scheme))
+    ( base = setProto ({ scheme:url.scheme }, base)
+    , url = setProto ({ scheme:null }, url) )
+  return genericResolve (url, base)
 }
 
 // WHATWG style reference resolution
 
-const WHATWGResolve = (url1, url2) => {
-  const mode = url1.scheme ? modeFor (url1) : modeFor (url2)
+const WHATWGResolve = (url, base) => {
+  const mode = url.scheme ? modeFor (url) : modeFor (base)
   if (mode & modes.special)
-    return force (legacyResolve (url1, url2))
-  if (url1.scheme || isFragment (url1) || url2.host != null || url2.root)
-    return genericResolve (url1, url2)
-  else throw new ResolveError (url1, url2)
+    return force (legacyResolve (url, base))
+  if (url.scheme || isFragment (url) || base.host != null || base.root)
+    return genericResolve (url, base)
+  else throw new ResolveError (url, base)
 }
 
 
