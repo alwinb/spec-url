@@ -94,6 +94,8 @@ const goto = (url1, url2) => {
   return r
 }
 
+const rebase = (url, base) =>
+  goto (base, url)
 
 
 // Forcing
@@ -605,8 +607,7 @@ export {
   version,
   
   modes, modeFor, 
-
-  ords, ord, upto, goto, 
+  ords, ord, upto, goto, rebase,
   forceAsFileUrl, forceAsWebUrl, force, 
   hasOpaquePath, genericResolve, legacyResolve,
   WHATWGResolve, WHATWGResolve as resolve,

@@ -49,7 +49,8 @@ URL objects are also subject to structural constraints. The errors function retu
 * ords — { scheme, auth, drive, root, dir, file, query, hash }
 * ord (url)
 * upto (url, ord)
-* goto (url1, url2 [, options])
+* goto (url1, url2)
+* rebase (url2, url1)
 
 ### Forcing
 
