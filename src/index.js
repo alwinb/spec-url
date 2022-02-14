@@ -32,28 +32,10 @@ const low = str =>
   str ? str.toLowerCase () : str
 
 
-
-// Validation
-// ----------
-
-// ### URL - Structural invariants
-
-const errors = url => {
-  const mode = modeFor (url)
-  const errs = authErrors (url, mode) || []
-
-  // drive-letter constraint
-  if (url.drive && mode !== modes.file)
-    errs.push (`A non file-URL cannot have a drive`)
-
-  // path-root constraint
-  if (!url.root && (url.host != null || url.drive) && (url.dirs || url.file))
-    errs.push (`A URL with a ${url.drive ? 'drive' : 'host'} must have an absolute path`)
-
-  return errs.length ? errs : null
-}
-
 // ### Authority - Structural invariants
+
+// NB I do allow web-URLs to have an empty host.
+// Instead, force will ensure that their host is not empty.
 
 const authErrors = (auth, mode = modes.generic) => {
   const errs = []
@@ -69,9 +51,6 @@ const authErrors = (auth, mode = modes.generic) => {
 
   if (auth.pass != null && auth.user == null)
     errs.push (`A URL without a username cannot have a password`)
-
-  // NB I do allow web-URLs to have an empty host
-  // This is however is *not* allowed for *resolved* web-URLs.
   
   return errs.length ? errs : null
 }
@@ -625,7 +604,6 @@ const unstable = { utf8, pct, PercentEncoder }
 export {
   version,
   
-  errors,
   modes, modeFor, 
 
   ords, ord, upto, goto, 
