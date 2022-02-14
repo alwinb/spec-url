@@ -3,77 +3,68 @@ import punycode from 'punycode'
 const log = console.log.bind (console)
 
 
-// Host Processing
-// ===============
+// Host Model
+// ==========
 
-const _forbidden =
-  /[\x00-\x20#%/:<>?@[\\\]^|\x7F]/g
+// - IPv6 addresses are parsed to an array of integers
+// - Domains are parsed to an array of domain-label-strings.
+// - IPv4 addresses are parsed to a single integer
+// - Opaque hosts are represented as non-empty strings
+// - Note that the empty *authority* is signified by setting
+//   the *host* property to the empty string. 
 
-function parseHost (input, mode, percentCoded = true) {
-  if (input) {
-    if (input[0] === '[') {
-      input = input.substr (1, input.length -2)
-      input = `[${ipv6.normalise (input)}]`
-    }
-    else if (mode & 3) { // 3 == modes.special (TODO API)
-      let r = percentCoded ? pct.decode (input) : input
+const types = 
+  { opaque:1, domain:2, ipv4:4, ipv6:6 }
 
-      // 'domainToASCII -- TODO implement proper
-      r = nameprep (r)
-      r = punycode.toUnicode (r)
+const hostType = host =>
+  typeof host === 'string' ? types.opaque :
+  typeof host === 'number' ? types.ipv4 :
+  typeof host[0] === 'number' ? types.ipv6 :
+  typeof host[0] === 'string' ? types.domain : null
 
-      const address = ipv4.parse (r)
-      if (address != null)
-        return ipv4.print (address)
 
-      // 'Ends in a number'
-      if (endsInNumber (r))
-        throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
+// ### Host parsing
 
-      if (!r.length || (_forbidden.lastIndex = 0, _forbidden .test (r)))
-        throw new Error (`Host parser: Invalid domain: ${JSON.stringify (r)}`)
+const parseFileHost = (input, percentCoded = true) =>
+  ( input === '' || typeof input !== 'string' ? input
+  : parseDomain (input, percentCoded) )
 
-      return r
-    }
-  }
-  return input
-}
+const parseWebHost = (input, percentCoded = true) =>
+  ( typeof input !== 'string' ? input
+  : parseDomain (input, percentCoded) )
 
-// This is a quick regex, to catch up with the WHATWG standard,
-// but TODO clean this up and do it in a nice way
-
-function endsInNumber (str) {
-  return /(^|[.])([0-9]+|0[xX][0-9A-Fa-f]*)[.]?$/ .test (str)
+const validateOpaqueHost = (input, percentCoded = true) => {
+  if (_opaqueHostCodes.test (input)) return input
+  else throw new Error (`Invalid opaque-host-string "${input}"`)
 }
 
 
-// ### IDNA/ Nameprep
-// Just a small part for now. 
-// TODO clean up and implement in full
+// NB parseDomain returns a domain **or an ipv4 address**.
 
-const tableB1 =
-  /[\u00AD\u034F\u1806\uFEFF\u2060\u180B-\u180D\u200B-\u200D\uFE00-\uFE0F]/g
-
-const tableC6 =
-  /[\uFFF9-\uFFFD]/g
-
-function nameprep (input) {
-  tableC6.lastIndex = tableB1.lastIndex = 0
-  input = input
-    .replace (tableB1, '')
-    .normalize ('NFKC')
-    .toLowerCase ()
-  for (let c of input) {
-    c = c.codePointAt (0)
-    const nonchar = 0xFDD0 <= c && c <= 0xFDEF || 
-      (c <= 0x10FFFF && ((c >> 1) & 0x7FFF) === 0x7FFF)
-    if (nonchar)
-      throw new Error ('Nameprep: Invalid code point')
-  }
-  if (tableC6 .test (input))
-    throw new Error ('Nameprep: Invalid code point')
-  return input
+function parseDomain (input, percentCoded = true) {
+  if (percentCoded) input = pct.decode (input)
+  let r = punycode.toUnicode (nameprep (input))
+  const address = ipv4.parse (r)
+  if (address != null) return address
+  if (r === '') throw new Error ('Invalid domain-string')
+  if (_endsInNumber.test (r)) throw new Error ('Invalid doimain-string')
+  if (_isDomainString.test (r)) return r.split ('.')
+  throw new Error ('Invalid doimain-string')
 }
+
+
+// ### Printing
+
+function printHost (host) {
+  const typ = hostType (host)
+  const r
+    = typ === types.ipv4 ? ipv4.print (host)
+    : typ === types.ipv6 ? `[${ipv6.print (host)}]`
+    : typ === types.domain ? host.join ('.')
+    : host
+  return r
+}
+
 
 
 // IPv4 Addresses
@@ -99,7 +90,7 @@ const ipv4 = {
         const rest = 5 - count
         if (err || (num >= 256**rest))
           throw new RangeError (`Invalid IPv4 address: <${input}>`)
-        return (addr << 8 * rest) + num }
+        return ((addr << 8 * rest) + num) >>> 0 }
 
       else {
         if (count === 4 || !match[4]) return null
@@ -119,6 +110,7 @@ const ipv4 = {
     return ipv4.print (ipv4.parse (input))
   }
 }
+
 
 
 // IPv6 Addresses
@@ -199,7 +191,59 @@ const ipv6 = {
   }
 }
 
-// Exports
+
+
+// Domains
 // -------
 
-export { ipv4, ipv6, parseHost }
+// TODO clean this up, implement it properly.
+
+const _isASCIIString =
+  /^[\0-\x7E]*$/
+
+const _opaqueHostCodes =
+  /^[^\x00\x09\x0A\x0D\x20#/:<>?@[\\\]^|]*$/
+
+const _isDomainString =
+  /^[^\x00-\x20\x7F#%/:<>?@[\\\]^|]*$/
+
+const _endsInNumber =
+  /(^|[.])([0-9]+|0[xX][0-9A-Fa-f]*)[.]?$/
+
+const punyEncode = domain => 
+  domain.map (label => 
+    _isASCIIString.test (label) ? label
+      : 'xn--' + punycode.encode (label))
+
+// 'IDNA/ Nameprep' - just a small part of it for now
+
+const tableB1 =
+  /[\u00AD\u034F\u1806\uFEFF\u2060\u180B-\u180D\u200B-\u200D\uFE00-\uFE0F]/g
+
+const tableC6 =
+  /[\uFFF9-\uFFFD]/g
+
+function nameprep (input) {
+  tableC6.lastIndex = tableB1.lastIndex = 0
+  input = input
+    .replace (tableB1, '')
+    .normalize ('NFKC')
+    .toLowerCase ()
+  for (let c of input) {
+    c = c.codePointAt (0)
+    const nonchar = 0xFDD0 <= c && c <= 0xFDEF || 
+      (c <= 0x10FFFF && ((c >> 1) & 0x7FFF) === 0x7FFF)
+    if (nonchar)
+      throw new Error ('Nameprep: Invalid code point')
+  }
+  if (tableC6 .test (input))
+    throw new Error ('Nameprep: Invalid code point')
+  return input
+}
+
+
+
+// Exports
+// =======
+
+export { ipv6, ipv4, types as hostTypes, hostType, parseWebHost, parseFileHost, validateOpaqueHost, printHost, parseDomain, punyEncode }

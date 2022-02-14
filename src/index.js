@@ -1,6 +1,7 @@
 import punycode from 'punycode'
-import { utf8, pct, encodeProfiles as profiles, PercentEncoder, encodeSets as sets } from './pct.js'
-import { parseHost, ipv4, ipv6 } from './host.js'
+import { parseAuth } from './auth.js'
+import { hostType, hostTypes, parseWebHost, parseFileHost, validateOpaqueHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
+import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
 
@@ -14,12 +15,12 @@ const ords =
   { scheme:1, auth:2, drive:3, root:4, dir:5, file:6, query:7, hash:8 }
 
 const modes =
-  { generic:0, web:1, file:2, special:3 }
+  { generic:1, noscheme:2, web:4, file:8, special:0b1100 }
 
 const specials =
-  { http:1, https:1, ws:1, wss:1, ftp:1, file:2 }
+  { http:4, https:4, ws:4, wss:4, ftp:4, file:8 }
 
-const modeFor = (url, fallback = modes.generic) =>
+const modeFor = (url, fallback = modes.noscheme) =>
   ( url.scheme ? specials [low (url.scheme)] || modes.generic
   : url.drive ? modes.file
   : fallback )
@@ -31,47 +32,29 @@ const low = str =>
   str ? str.toLowerCase () : str
 
 
-// Validation
-// ----------
-
-// ### URL - Structural invariants
-
-const errors = url => {
-  const mode = modeFor (url)
-  const errs = authErrors (url, mode) || []
-
-  // drive-letter constraint
-  if (url.drive && mode !== modes.file)
-    errs.push (`A non file-URL cannot have a drive`)
-
-  // path-root constraint
-  if (!url.root && (url.host != null || url.drive) && (url.dirs || url.file))
-    errs.push (`A URL with a ${url.drive ? 'drive' : 'host'} must have an absolute path`)
-
-  return errs.length ? errs : null
-}
-
 // ### Authority - Structural invariants
+
+// NB I do allow web-URLs to have an empty host.
+// Instead, force will ensure that their host is not empty.
 
 const authErrors = (auth, mode = modes.generic) => {
   const errs = []
+  const hasNoHost = auth.host == null || auth.host === ''
 
   if (auth.port != null)
     if (mode & modes.file) errs.push (`A file-URL cannot have a port`)
-    else if (!auth.host) errs.push (`A URL without a host cannot have a port`)
+    else if (hasNoHost) errs.push (`A URL without a host cannot have a port`)
 
   if (auth.user != null || auth.pass != null)
     if (mode & modes.file) errs.push (`A file-URL cannot have credentials`)
-    else if (!auth.host) errs.push (`A URL without a host cannot have credentials`)
+    else if (hasNoHost) errs.push (`A URL without a host cannot have credentials`)
 
   if (auth.pass != null && auth.user == null)
     errs.push (`A URL without a username cannot have a password`)
   
-  // NB I do allow web-URLs to have an empty host
-  // This is however is *not* allowed for *resolved* web-URLs.
-  
   return errs.length ? errs : null
 }
+
 
 
 // Order, Upto and Goto operations
@@ -98,18 +81,21 @@ const upto = (url, ord) => {
   return r
 }
 
-const goto = (url1, url2) => {
-  const r = upto (url1, ord (url2))
+const rebase = (url, base) => {
+  const r = upto (base, ord (url))
   for (const k in tags)
-    if (url2[k] == null) continue
+    if (url[k] == null) continue
     else if (k === 'dirs')
-      r.dirs = [...(r.dirs||[]), ...url2.dirs]
-    else r[k] = url2[k]
+      r.dirs = (r.dirs || []) .concat (url.dirs)
+    else r[k] = url[k]
   // Patch up root if needed
   if ((r.host != null || r.drive) && (r.dirs || r.file))
     r.root = '/'
   return r
 }
+
+const goto = (base, url) =>
+  rebase (url, base)
 
 
 // Forcing
@@ -118,43 +104,65 @@ const goto = (url1, url2) => {
 class ForceError extends TypeError {
   constructor (url) {
     super (`Cannot coerce <${print(url)}> to a base-URL`)
+    this.url = url
   }
 }
 
 const forceAsFileUrl = url => {
-  url = assign ({ }, url)
-  if (url.host == null) url.host = ''
-  if (url.drive == null) url.root = '/'
-  return url
+  try {
+    const { user, pass, port } = url
+    if (user != null || pass != null || port != null) throw url
+    const r = assign ({ }, url)
+    r.host = url.host == null ? '' : parseFileHost (url.host)
+    if (r.drive == null) r.root = '/'
+    return r
+  }
+  catch (e) { throw new ForceError (url) }
 }
 
 const forceAsWebUrl = url => {
-  url = assign ({ }, url)
-  if (!url.host) {
-    let str = url.host
-    const dirs = url.dirs ? url.dirs.slice () : []
-    while (!str && dirs.length) str = dirs.shift ()
-    if (!str) { str = url.file; delete url.file }
-    if (str) {
-      try { assign (url, parseAuth (str, modes.web)) }
-      catch (e) { throw new ForceError (url) }
-      if (dirs.length) url.dirs = dirs
-      else delete url.dirs
-      const errs = authErrors (url)
-      if (errs) throw new ForceError (url)
+  try {
+    const r = assign ({ }, url)
+    if (url.host == null || url.host === '') {
+      const match = _firstNonEmptySegment (url)
+      assign (r, parseAuth (match.value))
+      _removeSegments (r, match)
     }
-    else throw new ForceError (url)
+    r.host = parseWebHost (r.host)
+    r.root = '/'
+    return r
   }
-  url.root = '/'
-  return url
+  catch (e) { throw new ForceError (url) }
 }
 
 const force = url => {
-  const mode = specials [low (url.scheme)] || modes.generic
+  const mode = modeFor (url)
   if (mode === modes.file) return forceAsFileUrl (url)
   else if (mode === modes.web) return forceAsWebUrl (url)
   else if (url.scheme) return url
   else throw new ForceError (url)
+}
+
+// Utils
+
+const _firstNonEmptySegment = url => {
+  const dirs = url.dirs || []
+  for (let i=0, l=dirs.length; i<l;i++) if (dirs[i])
+    return { value:dirs[i], ord:ords.dir, index:i }
+  if (url.file)
+    return { value:url.file, ord:ords.file }
+  throw null // not found
+}
+
+const _removeSegments = (url, match) => {
+  if (match.ord === ords.dir) {
+    const dirs_ = url.dirs.slice (match.index + 1)
+    if (dirs_.length) url.dirs = dirs_
+    else delete url.dirs
+  }
+  else if (match.ord === ords.file)
+    delete url.file
+  return url
 }
 
 
@@ -174,30 +182,31 @@ const hasOpaquePath = url =>
 
 // 'Strict' Reference Resolution according to RFC3986
 
-const genericResolve = (url1, url2) => {
-  if (url1.scheme || url2.scheme) return goto (url2, url1)
+const genericResolve = (url, base) => {
+  if (url.scheme || base.scheme) return rebase (url, base)
   else throw new ResolveError (url1, url2)
 }
 
 // 'Non-strict' Reference Resolution according to RFC3986
 
-const legacyResolve = (url1, url2) => {
-  if (url1.scheme && low (url1.scheme) === low (url2.scheme))
-    ( url2 = setProto ({ scheme:url1.scheme }, url2)
-    , url1 = setProto ({ scheme:null }, url1) )
-  return genericResolve (url1, url2)
+const legacyResolve = (url, base) => {
+  if (url.scheme && low (url.scheme) === low (base.scheme))
+    ( base = setProto ({ scheme:url.scheme }, base)
+    , url = setProto ({ scheme:null }, url) )
+  return genericResolve (url, base)
 }
 
 // WHATWG style reference resolution
 
-const WHATWGResolve = (url1, url2) => {
-  const mode = url1.scheme ? modeFor (url1) : modeFor (url2)
+const WHATWGResolve = (url, base) => {
+  const mode = url.scheme ? modeFor (url) : modeFor (base)
   if (mode & modes.special)
-    return force (legacyResolve (url1, url2))
-  if (url1.scheme || isFragment (url1) || url2.host != null || url2.root)
-    return genericResolve (url1, url2)
-  else throw new ResolveError (url1, url2)
+    return force (legacyResolve (url, base))
+  if (url.scheme || isFragment (url) || base.host != null || base.root)
+    return genericResolve (url, base)
+  else throw new ResolveError (url, base)
 }
+
 
 
 // Normalisation
@@ -246,7 +255,7 @@ const normalise = (url, coded = true) => {
 
   // ### Scheme-based authority normalisation
 
-  if (scheme === 'file' && r.host === 'localhost')
+  if (scheme === 'file' && isLocalHost (r.host))
     r.host = ''
 
   else if (url.port === 80 && (scheme === 'http' || scheme === 'ws'))
@@ -276,19 +285,29 @@ const dots = (seg, coded = true) =>
     || coded && low (seg) === '%2e%2e') ? 2 : 0
 
 
+const isLocalHost = host =>
+  host === 'localhost' ||
+  hostType (host) === hostTypes.domain && host.length === 1 && host[0] === 'localhost'
+
+
+
 // Percent Coding URLs
 // -------------------
 // NB uses punycoding rather than percent coding on domains
 
-const percentEncode = (url, spec = 'normal') => {
+const percentEncode = (url, spec = 'WHATWG') => {
   const r = { }
-  const mode = modeFor (url, modes.generic)
+
   // TODO strictly speaking, IRI must encode more than URL
-  const unicode = spec === 'minimal' || spec === 'URL' || spec === 'IRI'
+  // -- and in addition, URI and IRI should decode unreserved characters
+  // -- and should not contain invalid percent encode sequences
+  const mode = modeFor (url)
+
+  const unicode = spec in { minimal:1, URL:1, IRI:1 }
   const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
-  const profile = spec === 'minimal' ? profiles.minimal
-    : spec === 'normal' ? (mode & modes.special ? profiles.normal_special : profiles.normal)
-    : profiles.valid
+  const profile = (mode & modes.special) 
+    ? specialProfiles [spec] || specialProfiles.default
+    : profiles [spec] || profiles.default
 
   if (url.scheme != null)
     r.scheme = url.scheme
@@ -300,12 +319,13 @@ const percentEncode = (url, spec = 'normal') => {
     r.pass = encode (url.pass, profile.pass)
 
   if (url.host != null) {
-    if (_isIp6 (url.host))
-      r.host = url.host
-    else if (!unicode && mode & modes.special)
-      r.host = punycode.toASCII (url.host)
-    else
-      r.host = encode (url.host, profile.host)
+    const t = hostType (url.host)    
+    r.host
+      = t === hostTypes.ipv6 ? [...url.host]
+      : t === hostTypes.ipv4 ? url.host
+      : t === hostTypes.domain ? (unicode ? [...url.host] : punyEncode (url.host))
+      : t === hostTypes.opaque ? encode (url.host, profile.host)
+      : url.host
   }
 
   if (url.port != null)
@@ -352,11 +372,6 @@ const percentDecode = url => {
   return r
 }
 
-
-// TODO design the ip4/ip6 host representation for the spec
-
-const _isIp6 = str => 
-  str != null && str[0] === '[' && str[str.length-1] === ']'
 
 
 // URL Printing
@@ -413,7 +428,7 @@ const unsafePrint = url => {
       k === 'scheme' ? ( v + ':') :
       k === 'user'   ? ('//' + v) :
       k === 'pass'   ? ( ':' + v) :
-      k === 'host'   ? ((hasCredentials ? '@' : '//') + v) :
+      k === 'host'   ? ((hasCredentials ? '@' : '//') + printHost (v)) :
       k === 'port'   ? (':' + v) :
       k === 'drive'  ? ('/' + v) :
       k === 'root'   ? ('/'    ) :
@@ -424,6 +439,7 @@ const unsafePrint = url => {
   }
   return result
 }
+
 
 
 // URL Parsing
@@ -446,7 +462,7 @@ const isAlpha = c =>
 
 // ### URL Parsing
 
-function parse (input, mode = modes.web) {
+function parse (input, mode = modes.noscheme) {
   const url   = { }
   let state   = START|SCHEME
   let slashes = 0, letter = false, isDrive = false
@@ -494,7 +510,12 @@ function parse (input, mode = modes.web) {
       }
 
       else if (state & AUTH) {
-        assign (url, parseAuth (buffer, mode, true)) // TODO API
+        assign (url, parseAuth (buffer))
+
+        url.host = mode & modes.web ? parseWebHost (url.host)
+          : mode & modes.file ? parseFileHost (url.host)
+          : validateOpaqueHost (url.host)
+
         if (isSlash) url.root = '/'
         const errs = authErrors (url, mode)
         if (errs) {
@@ -552,38 +573,6 @@ function parse (input, mode = modes.web) {
   return url
 }
 
-// ### Authority Parsing
-
-const raw = String.raw
-const group = _ => '(?:' + _ + ')'
-const opt   = _ => '(?:' + _ + ')?'
-const Rexp  = _ => new RegExp ('^' + _ + '$')
-
-const
-  port     = '[:]([0-9]*)',
-  user     = '([^:]*)',
-  pass     = '[:](.*)',
-  host     = raw `(\[[^\]]*\]|[^\0\t\n\r #/:<>?@[\\\]^|]*)`,
-  creds    = user + opt (pass) + '[@]',
-  authExp  = Rexp (opt (creds) + host + opt (port))
-
-function parseAuth (input, mode, percentCoded = true) {
-  let match, user, pass, host, port, _
-  if (input.length === 0) host = ''
-  else if ((match = authExp.exec (input))) {
-    [_, user, pass, host, port] = match
-    if (port != null && port.length) {
-      port = +port
-      if (port >= 2**16)
-        throw new Error (`Authority parser: Port out of bounds <${input}>`)
-    }
-  }
-  else throw new Error (`Authority parser: Illegal authority <${input}>`)
-  host = parseHost (host, mode, percentCoded)
-  const auth = { user, pass, host, port }
-  for (const k in auth) if (auth[k] == null) delete auth[k]
-  return auth
-}
 
 
 // WHATWG Parse Resolve and Normalise
@@ -597,23 +586,22 @@ const WHATWGParseResolve = (input, base) => {
     resolved = WHATWGResolve (url, baseUrl)
   }
   else resolved = force (parse (input))
-  return percentEncode (normalise (resolved))
+  return percentEncode (normalise (resolved), 'WHATWG')
 }
+
 
 
 // Exports
 // =======
 
-const version = '2.2.0-dev'
+const version = '2.3.0-dev'
 const unstable = { utf8, pct, PercentEncoder }
 
 export {
   version,
   
-  errors,
   modes, modeFor, 
-
-  ords, ord, upto, goto, 
+  ords, ord, upto, goto, rebase,
   forceAsFileUrl, forceAsWebUrl, force, 
   hasOpaquePath, genericResolve, legacyResolve,
   WHATWGResolve, WHATWGResolve as resolve,
@@ -621,7 +609,7 @@ export {
   normalise, normalise as normalize,
   percentEncode, percentDecode,
 
-  parse, parseAuth, parseHost,
+  parse, parseAuth, parseWebHost, parseFileHost, validateOpaqueHost,
   WHATWGParseResolve, WHATWGParseResolve as parseResolve,
 
   ipv4, ipv6,
