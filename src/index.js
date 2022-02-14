@@ -1,6 +1,6 @@
 import punycode from 'punycode'
 import { parseAuth } from './auth.js'
-import { hostType, hostTypes, parseHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
+import { hostType, hostTypes, parseWebHost, parseFileHost, validateOpaqueHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
 import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
@@ -109,37 +109,30 @@ class ForceError extends TypeError {
 }
 
 const forceAsFileUrl = url => {
-  url = assign ({ }, url)
-  if (url.host == null) url.host = ''
-  if (url.drive == null) url.root = '/'
-  if (url.user != null || url.pass != null || url.port != null)
-    throw new ForceError (url)
-  return url
+  try {
+    const { user, pass, port } = url
+    if (user != null || pass != null || port != null) throw url
+    const r = assign ({ }, url)
+    r.host = url.host == null ? '' : parseFileHost (url.host)
+    if (r.drive == null) r.root = '/'
+    return r
+  }
+  catch (e) { throw new ForceError (url) }
 }
 
 const forceAsWebUrl = url => {
-  url = assign ({ }, url)
-  try { 
-
+  try {
+    const r = assign ({ }, url)
     if (url.host == null || url.host === '') {
       const match = _firstNonEmptySegment (url)
-      const auth = parseAuth (match.value)
-      if (auth.host === '') throw null
-      assign (url, auth)
-      _removeSegments (url, match)
+      assign (r, parseAuth (match.value))
+      _removeSegments (r, match)
     }
-
-    if (typeof url.host === 'string') {
-      const host = parseHost (url.host, modes.web)
-      if (!host) throw null
-      else url.host = host
-    }
-
-    url.root = '/'
-    return url
+    r.host = parseWebHost (r.host)
+    r.root = '/'
+    return r
   }
-  catch (e) {
-  throw new ForceError (url) }
+  catch (e) { throw new ForceError (url) }
 }
 
 const force = url => {
@@ -518,9 +511,10 @@ function parse (input, mode = modes.noscheme) {
 
       else if (state & AUTH) {
         assign (url, parseAuth (buffer))
-        const host = parseHost (url.host, mode)
-        if (host == null) throw new Error (`Invalid host-string "${input}"`)
-        else url.host = host
+
+        url.host = mode & modes.web ? parseWebHost (url.host)
+          : mode & modes.file ? parseFileHost (url.host)
+          : validateOpaqueHost (url.host)
 
         if (isSlash) url.root = '/'
         const errs = authErrors (url, mode)
@@ -615,7 +609,7 @@ export {
   normalise, normalise as normalize,
   percentEncode, percentDecode,
 
-  parse, parseAuth, parseHost,
+  parse, parseAuth, parseWebHost, parseFileHost, validateOpaqueHost,
   WHATWGParseResolve, WHATWGParseResolve as parseResolve,
 
   ipv4, ipv6,

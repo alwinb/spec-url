@@ -25,24 +25,31 @@ const hostType = host =>
 
 // ### Host parsing
 
-const parseHost = (input, mode, percentCoded = true) =>
-  ( typeof input !== 'string'     ? input
-  : input === ''                  ? input
-  : mode & 0b1100                 ? parseDomain (input, percentCoded)
-  : _opaqueHostCodes.test (input) ? input
-  : null )
+const parseFileHost = (input, percentCoded = true) =>
+  ( input === '' || typeof input !== 'string' ? input
+  : parseDomain (input, percentCoded) )
 
-// NB returns a domain, an ipv4 address, or null as fail
+const parseWebHost = (input, percentCoded = true) =>
+  ( typeof input !== 'string' ? input
+  : parseDomain (input, percentCoded) )
+
+const validateOpaqueHost = (input, percentCoded = true) => {
+  if (_opaqueHostCodes.test (input)) return input
+  else throw new Error (`Invalid opaque-host-string "${input}"`)
+}
+
+
+// NB parseDomain returns a domain **or an ipv4 address**.
 
 function parseDomain (input, percentCoded = true) {
   if (percentCoded) input = pct.decode (input)
   let r = punycode.toUnicode (nameprep (input))
   const address = ipv4.parse (r)
   if (address != null) return address
-  if (r === '') return null
-  if (_endsInNumber.test (r)) return null
+  if (r === '') throw new Error ('Invalid domain-string')
+  if (_endsInNumber.test (r)) throw new Error ('Invalid doimain-string')
   if (_isDomainString.test (r)) return r.split ('.')
-  return null
+  throw new Error ('Invalid doimain-string')
 }
 
 
@@ -239,4 +246,4 @@ function nameprep (input) {
 // Exports
 // =======
 
-export { ipv6, ipv4, types as hostTypes, hostType, parseHost, printHost, parseDomain, punyEncode }
+export { ipv6, ipv4, types as hostTypes, hostType, parseWebHost, parseFileHost, validateOpaqueHost, printHost, parseDomain, punyEncode }
