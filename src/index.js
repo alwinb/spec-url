@@ -512,7 +512,11 @@ function parse (input, mode = modes.noscheme) {
       }
 
       else if (state & AUTH) {
-        assign (url, parseAuth (buffer, mode, true)) // TODO API
+        assign (url, parseAuth (buffer))
+        const host = parseHost (url.host, mode)
+        if (host == null) throw new Error (`Invalid host-string "${input}"`)
+        else url.host = host
+
         if (isSlash) url.root = '/'
         const errs = authErrors (url, mode)
         if (errs) {

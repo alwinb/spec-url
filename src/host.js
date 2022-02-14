@@ -25,18 +25,12 @@ const hostType = host =>
 
 // ### Host parsing
 
-// NB returns an ipv6 address, a domain, an ipv4 address, or null as fail
-
-function parseHost (input, mode, percentCoded = true) {
-  return (input === '' ? input
-    : input[0] === '['
-    ? ipv6.parse (input.substring (1, input.length - 1))
-    : mode & 0b1100
-    ? parseDomain (input, percentCoded)
-    : _opaqueHostCodes.test (input)
-    ? input
-    : null )
-}
+const parseHost = (input, mode, percentCoded = true) =>
+  ( typeof input !== 'string'     ? input
+  : input === ''                  ? input
+  : mode & 0b1100                 ? parseDomain (input, percentCoded)
+  : _opaqueHostCodes.test (input) ? input
+  : null )
 
 // NB returns a domain, an ipv4 address, or null as fail
 
