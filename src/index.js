@@ -247,11 +247,6 @@ const normalise = (url, coded = true) => {
       if (isDots === 2) dirs.pop ()
       else if (!isDots) dirs.push (x)
     }
-    if (r.file) {
-      const isDots = dots (r.file, coded)
-      if (isDots === 2) dirs.pop ()
-      if (isDots) delete r.file
-    }
     if (dirs.length) r.dirs = dirs
     else delete r.dirs
   }
@@ -564,6 +559,15 @@ function parse (input, mode = modes.noscheme) {
     if (c > SP) end = buffer.length
   }
 
+  // Disallow dotted file segments:
+  // Convert `..` to `../` and `.` to `./`
+
+  const fileDots = url.file && dots (url.file)
+  if (!hasOpaquePath (url) && fileDots) {
+    if (url.dirs) url.dirs.push (url.file)
+    else url.dirs = [url.file]
+    delete url.file
+  }
   return url
 }
 
