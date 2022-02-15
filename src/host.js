@@ -16,7 +16,7 @@ const log = console.log.bind (console)
 const types = 
   { opaque:1, domain:2, ipv4:4, ipv6:6 }
 
-const hostType = host =>
+const hostType = host => host == null ? null :
   typeof host === 'string' ? types.opaque :
   typeof host === 'number' ? types.ipv4 :
   typeof host[0] === 'number' ? types.ipv6 :
@@ -25,7 +25,7 @@ const hostType = host =>
 
 // ### Host parsing
 
-const parseFileHost = (input, percentCoded = true) =>
+const parseHost = (input, percentCoded = true) =>
   ( input === '' || typeof input !== 'string' ? input
   : parseDomain (input, percentCoded) )
 
@@ -42,14 +42,14 @@ const validateOpaqueHost = (input, percentCoded = true) => {
 // NB parseDomain returns a domain **or an ipv4 address**.
 
 function parseDomain (input, percentCoded = true) {
-  if (percentCoded) input = pct.decode (input)
-  let r = punycode.toUnicode (nameprep (input))
+  let r = percentCoded ? pct.decode (input) : input
+  r = punycode.toUnicode (nameprep (r))
   const address = ipv4.parse (r)
   if (address != null) return address
   if (r === '') throw new Error ('Invalid domain-string')
   if (_endsInNumber.test (r)) throw new Error ('Invalid doimain-string')
   if (_isDomainString.test (r)) return r.split ('.')
-  throw new Error ('Invalid doimain-string')
+  throw new Error (`Invalid domain-string "${input}"`)
 }
 
 
@@ -246,4 +246,4 @@ function nameprep (input) {
 // Exports
 // =======
 
-export { ipv6, ipv4, types as hostTypes, hostType, parseWebHost, parseFileHost, validateOpaqueHost, printHost, parseDomain, punyEncode }
+export { ipv6, ipv4, types as hostTypes, hostType, parseHost, parseWebHost, validateOpaqueHost, printHost, parseDomain, punyEncode }

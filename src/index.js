@@ -1,6 +1,6 @@
 import punycode from 'punycode'
 import { parseAuth } from './auth.js'
-import { hostType, hostTypes, parseWebHost, parseFileHost, validateOpaqueHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
+import { hostType, hostTypes, parseHost, parseWebHost, validateOpaqueHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
 import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
@@ -15,7 +15,7 @@ const ords =
   { scheme:1, auth:2, drive:3, root:4, dir:5, file:6, query:7, hash:8 }
 
 const modes =
-  { generic:1, noscheme:2, web:4, file:8, special:0b1100 }
+  { generic:1, noscheme:2, web:4, file:8, special:0b1110 }
 
 const specials =
   { http:4, https:4, ws:4, wss:4, ftp:4, file:8 }
@@ -113,7 +113,7 @@ const forceAsFileUrl = url => {
     const { user, pass, port } = url
     if (user != null || pass != null || port != null) throw url
     const r = assign ({ }, url)
-    r.host = url.host == null ? '' : parseFileHost (url.host)
+    r.host = url.host == null ? '' : parseHost (url.host)
     if (r.drive == null) r.root = '/'
     return r
   }
@@ -212,6 +212,10 @@ const WHATWGResolve = (url, base) => {
 // Normalisation
 // -------------
 
+const defaultPorts =
+  { http: 80, ws: 80, https: 443, wss: 443, ftp: 21 }
+
+
 const normalise = (url, coded = true) => {
 
   const r = assign ({}, url)
@@ -226,6 +230,10 @@ const normalise = (url, coded = true) => {
   if (r.pass === '') delete r.pass
   if (!r.pass && r.user === '') delete r.user
   if (r.port === '') delete r.port
+
+  // ### Drive letter normalisation
+
+  if (r.drive) r.drive = r.drive[0] + ':'
 
   // ### Path segement normalisation
 
@@ -248,23 +256,12 @@ const normalise = (url, coded = true) => {
     else delete r.dirs
   }
 
-  // ### Drive letter normalisation
-
-  if (r.drive)
-    r.drive = r.drive[0] + ':'
-
   // ### Scheme-based authority normalisation
 
   if (scheme === 'file' && isLocalHost (r.host))
     r.host = ''
 
-  else if (url.port === 80 && (scheme === 'http' || scheme === 'ws'))
-    delete r.port
-
-  else if (url.port === 443 && (scheme === 'https' || scheme === 'wss'))
-    delete r.port
-
-  else if (url.port === 21 && scheme === 'ftp')
+  else if (url.port === defaultPorts [scheme])
     delete r.port
 
   for (const k in tags)
@@ -297,11 +294,11 @@ const isLocalHost = host =>
 
 const percentEncode = (url, spec = 'WHATWG') => {
   const r = { }
+  const mode = modeFor (url)
 
   // TODO strictly speaking, IRI must encode more than URL
   // -- and in addition, URI and IRI should decode unreserved characters
   // -- and should not contain invalid percent encode sequences
-  const mode = modeFor (url)
 
   const unicode = spec in { minimal:1, URL:1, IRI:1 }
   const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
@@ -338,14 +335,11 @@ const percentEncode = (url, spec = 'WHATWG') => {
     r.root = '/'
 
   // ... opaque paths
-  const seg_esc = mode === modes.generic && hasOpaquePath (url)
+  const seg_esc = hasOpaquePath (url)
     ? profiles.minimal.dir | sets.c0c1 : profile.dir
 
-  if (url.dirs) {
-    r.dirs = []
-    for (const x of url.dirs)
-      r.dirs.push (encode (x, seg_esc))
-  }
+  if (url.dirs)
+    r.dirs = url.dirs.map (x => encode (x, seg_esc))
 
   if (url.file != null)
     r.file = encode (url.file, seg_esc)
@@ -512,8 +506,8 @@ function parse (input, mode = modes.noscheme) {
       else if (state & AUTH) {
         assign (url, parseAuth (buffer))
 
-        url.host = mode & modes.web ? parseWebHost (url.host)
-          : mode & modes.file ? parseFileHost (url.host)
+        url.host = mode & (modes.web | modes.file)
+          ? parseHost (url.host) // NB empty hosts are allowed
           : validateOpaqueHost (url.host)
 
         if (isSlash) url.root = '/'
@@ -594,7 +588,7 @@ const WHATWGParseResolve = (input, base) => {
 // Exports
 // =======
 
-const version = '2.3.0-dev'
+const version = '2.3.1-dev'
 const unstable = { utf8, pct, PercentEncoder }
 
 export {
@@ -609,7 +603,7 @@ export {
   normalise, normalise as normalize,
   percentEncode, percentDecode,
 
-  parse, parseAuth, parseWebHost, parseFileHost, validateOpaqueHost,
+  parse, parseAuth, parseHost, parseWebHost, validateOpaqueHost,
   WHATWGParseResolve, WHATWGParseResolve as parseResolve,
 
   ipv4, ipv6,

@@ -76,7 +76,7 @@ Forcing is used to coerce an URL to an absolute URL. Absolute URLs always have a
 * modeFor (url, fallback)
 * parse (string [, mode])
 * parseAuth (string)
-* parseFileHost (string-or-host)
+* parseHost (string-or-host)
 * parseWebHost (string-or-host)
 * validateOpaqueHost (string)
 
@@ -121,6 +121,11 @@ There is a one-to-one correspondence between this representation and sequences o
 
 Changelog
 ---------
+
+### Version 2.3.1-dev
+
+- Corrects a mistake where scheme-less URLs were in fact not handled as suggested in the latest release notes.
+- The parser no longer enforces that web-URLs have a non-empty host, this is enforced just before resolution only.
 
 ### Version 2.3.0-dev
 
