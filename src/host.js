@@ -25,7 +25,7 @@ const hostType = host =>
 
 // ### Host parsing
 
-const parseFileHost = (input, percentCoded = true) =>
+const parseHost = (input, percentCoded = true) =>
   ( input === '' || typeof input !== 'string' ? input
   : parseDomain (input, percentCoded) )
 
@@ -246,4 +246,4 @@ function nameprep (input) {
 // Exports
 // =======
 
-export { ipv6, ipv4, types as hostTypes, hostType, parseWebHost, parseFileHost, validateOpaqueHost, printHost, parseDomain, punyEncode }
+export { ipv6, ipv4, types as hostTypes, hostType, parseHost, parseWebHost, validateOpaqueHost, printHost, parseDomain, punyEncode }

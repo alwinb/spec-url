@@ -1,6 +1,6 @@
 import punycode from 'punycode'
 import { parseAuth } from './auth.js'
-import { hostType, hostTypes, parseWebHost, parseFileHost, validateOpaqueHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
+import { hostType, hostTypes, parseHost, parseWebHost, validateOpaqueHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
 import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
@@ -113,7 +113,7 @@ const forceAsFileUrl = url => {
     const { user, pass, port } = url
     if (user != null || pass != null || port != null) throw url
     const r = assign ({ }, url)
-    r.host = url.host == null ? '' : parseFileHost (url.host)
+    r.host = url.host == null ? '' : parseHost (url.host)
     if (r.drive == null) r.root = '/'
     return r
   }
@@ -512,8 +512,8 @@ function parse (input, mode = modes.noscheme) {
       else if (state & AUTH) {
         assign (url, parseAuth (buffer))
 
-        url.host = mode & modes.web ? parseWebHost (url.host)
-          : mode & modes.file ? parseFileHost (url.host)
+        url.host = mode & (modes.web | modes.file)
+          ? parseHost (url.host) // NB empty hosts are allowed
           : validateOpaqueHost (url.host)
 
         if (isSlash) url.root = '/'
@@ -609,7 +609,7 @@ export {
   normalise, normalise as normalize,
   percentEncode, percentDecode,
 
-  parse, parseAuth, parseWebHost, parseFileHost, validateOpaqueHost,
+  parse, parseAuth, parseHost, parseWebHost, validateOpaqueHost,
   WHATWGParseResolve, WHATWGParseResolve as parseResolve,
 
   ipv4, ipv6,
