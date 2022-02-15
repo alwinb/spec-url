@@ -42,14 +42,14 @@ const validateOpaqueHost = (input, percentCoded = true) => {
 // NB parseDomain returns a domain **or an ipv4 address**.
 
 function parseDomain (input, percentCoded = true) {
-  if (percentCoded) input = pct.decode (input)
-  let r = punycode.toUnicode (nameprep (input))
+  let r = percentCoded ? pct.decode (input) : input
+  r = punycode.toUnicode (nameprep (r))
   const address = ipv4.parse (r)
   if (address != null) return address
   if (r === '') throw new Error ('Invalid domain-string')
   if (_endsInNumber.test (r)) throw new Error ('Invalid doimain-string')
   if (_isDomainString.test (r)) return r.split ('.')
-  throw new Error ('Invalid doimain-string')
+  throw new Error (`Invalid domain-string "${input}"`)
 }
 
 

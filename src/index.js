@@ -15,7 +15,7 @@ const ords =
   { scheme:1, auth:2, drive:3, root:4, dir:5, file:6, query:7, hash:8 }
 
 const modes =
-  { generic:1, noscheme:2, web:4, file:8, special:0b1100 }
+  { generic:1, noscheme:2, web:4, file:8, special:0b1110 }
 
 const specials =
   { http:4, https:4, ws:4, wss:4, ftp:4, file:8 }
