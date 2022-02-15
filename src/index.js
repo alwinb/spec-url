@@ -212,6 +212,10 @@ const WHATWGResolve = (url, base) => {
 // Normalisation
 // -------------
 
+const defaultPorts =
+  { http: 80, ws: 80, https: 443, wss: 443, ftp: 21 }
+
+
 const normalise = (url, coded = true) => {
 
   const r = assign ({}, url)
@@ -226,6 +230,10 @@ const normalise = (url, coded = true) => {
   if (r.pass === '') delete r.pass
   if (!r.pass && r.user === '') delete r.user
   if (r.port === '') delete r.port
+
+  // ### Drive letter normalisation
+
+  if (r.drive) r.drive = r.drive[0] + ':'
 
   // ### Path segement normalisation
 
@@ -248,23 +256,12 @@ const normalise = (url, coded = true) => {
     else delete r.dirs
   }
 
-  // ### Drive letter normalisation
-
-  if (r.drive)
-    r.drive = r.drive[0] + ':'
-
   // ### Scheme-based authority normalisation
 
   if (scheme === 'file' && isLocalHost (r.host))
     r.host = ''
 
-  else if (url.port === 80 && (scheme === 'http' || scheme === 'ws'))
-    delete r.port
-
-  else if (url.port === 443 && (scheme === 'https' || scheme === 'wss'))
-    delete r.port
-
-  else if (url.port === 21 && scheme === 'ftp')
+  else if (url.port === defaultPorts [scheme])
     delete r.port
 
   for (const k in tags)

@@ -16,7 +16,7 @@ const log = console.log.bind (console)
 const types = 
   { opaque:1, domain:2, ipv4:4, ipv6:6 }
 
-const hostType = host =>
+const hostType = host => host == null ? null :
   typeof host === 'string' ? types.opaque :
   typeof host === 'number' ? types.ipv4 :
   typeof host[0] === 'number' ? types.ipv6 :
