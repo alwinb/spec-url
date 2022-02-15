@@ -57,8 +57,8 @@ const authErrors = (auth, mode = modes.generic) => {
 
 
 
-// Order, Upto and Goto operations
-// -------------------------------
+// Order, Upto and Rebase
+// ----------------------
 
 const tags = {
   scheme:1, user:2, pass:2, host:2, port:2, drive:3,
@@ -81,7 +81,7 @@ const upto = (url, ord) => {
   return r
 }
 
-const rebase = (url, base) => {
+const _rebase = (url, base) => {
   const r = upto (base, ord (url))
   for (const k in tags)
     if (url[k] == null) continue
@@ -92,6 +92,27 @@ const rebase = (url, base) => {
   if ((r.host != null || r.drive) && (r.dirs || r.file))
     r.root = '/'
   return r
+}
+
+
+// Rebase
+// ------
+
+class RebaseError extends TypeError {
+  constructor (url1, url2) {
+    super (`Cannot rebase <${print(url1)}> onto <${print(url2)}>`)
+  }
+}
+
+// This generalises WHATWGResolve. It makes the same distinctions
+// between file-, web- and opaque-path URLs.
+
+const rebase = (url, base) => {
+  if (url.scheme && modeFor (url) & modes.special && low (url.scheme) === low (base.scheme))
+    url = setProto ({ scheme:null }, url)
+  if (url.scheme || isFragment (url) || !hasOpaquePath (base))
+    return _rebase (url, base)
+  else throw new RebaseError (url, base)
 }
 
 const goto = (base, url) =>
@@ -198,14 +219,9 @@ const legacyResolve = (url, base) => {
 
 // WHATWG style reference resolution
 
-const WHATWGResolve = (url, base) => {
-  const mode = url.scheme ? modeFor (url) : modeFor (base)
-  if (mode & modes.special)
-    return force (legacyResolve (url, base))
-  if (url.scheme || isFragment (url) || base.host != null || base.root)
-    return genericResolve (url, base)
-  else throw new ResolveError (url, base)
-}
+const WHATWGResolve = (url, base) =>
+  base == null ? force (url)
+  : force (rebase (url, base))
 
 
 
@@ -581,14 +597,15 @@ function parse (input, mode = modes.noscheme) {
 // WHATWG Parse Resolve and Normalise
 // ----------------------------------
 
+const parseRebase = (input, base) => {
+  if (base == null) return parse (input)
+  if (typeof base === 'string') base = parse (base)
+  const url = parse (input, modeFor (base))
+  return rebase (url, base)
+}
+
 const WHATWGParseResolve = (input, base) => {
-  let resolved;
-  if (base != null) {
-    const baseUrl = parse (base)
-    const url = parse (input, modeFor (baseUrl))
-    resolved = WHATWGResolve (url, baseUrl)
-  }
-  else resolved = force (parse (input))
+  const resolved = force (parseRebase (input, base))
   return percentEncode (normalise (resolved), 'WHATWG')
 }
 

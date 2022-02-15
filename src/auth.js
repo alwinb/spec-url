@@ -69,4 +69,4 @@ const parsePort = input => {
   throw new Error (`Invalid port-string: "${input}"`)
 }
 
-export { parseAuth }
+export { parseAuth, parsePort }
