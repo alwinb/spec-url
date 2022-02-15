@@ -122,6 +122,11 @@ There is a one-to-one correspondence between this representation and sequences o
 Changelog
 ---------
 
+### Version 2.3.1-dev
+
+- Corrects a mistake where scheme-less URLs were in fact not handled as suggested in the latest release notes.
+- The parser no longer enforces that web-URLs have a non-empty host, this is enforced just before resolution only.
+
 ### Version 2.3.0-dev
 
 Towards a simple API without modes; towards loosening the constraints on the model a bit, and enforcing them in the resolution operation:
