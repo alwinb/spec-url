@@ -294,11 +294,11 @@ const isLocalHost = host =>
 
 const percentEncode = (url, spec = 'WHATWG') => {
   const r = { }
+  const mode = modeFor (url)
 
   // TODO strictly speaking, IRI must encode more than URL
   // -- and in addition, URI and IRI should decode unreserved characters
   // -- and should not contain invalid percent encode sequences
-  const mode = modeFor (url)
 
   const unicode = spec in { minimal:1, URL:1, IRI:1 }
   const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
@@ -335,14 +335,11 @@ const percentEncode = (url, spec = 'WHATWG') => {
     r.root = '/'
 
   // ... opaque paths
-  const seg_esc = mode === modes.generic && hasOpaquePath (url)
+  const seg_esc = hasOpaquePath (url)
     ? profiles.minimal.dir | sets.c0c1 : profile.dir
 
-  if (url.dirs) {
-    r.dirs = []
-    for (const x of url.dirs)
-      r.dirs.push (encode (x, seg_esc))
-  }
+  if (url.dirs)
+    r.dirs = url.dirs.map (x => encode (x, seg_esc))
 
   if (url.file != null)
     r.file = encode (url.file, seg_esc)
