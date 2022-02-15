@@ -630,6 +630,7 @@ export {
   percentEncode, percentDecode,
 
   parse, parseAuth, parseHost, parseWebHost, validateOpaqueHost,
+  parseRebase,
   WHATWGParseResolve, WHATWGParseResolve as parseResolve,
 
   ipv4, ipv6,
