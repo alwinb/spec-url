@@ -248,6 +248,7 @@ const normalise = (url, coded = true) => {
       else if (!isDots) dirs.push (x)
     }
     if (dirs.length) r.dirs = dirs
+    else if (ord (url) === ords.dir) r.dirs = ['.']
     else delete r.dirs
   }
 
