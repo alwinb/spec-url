@@ -244,8 +244,12 @@ const normalise = (url, coded = true) => {
     const dirs = []
     for (const x of r.dirs||[]) {
       const isDots = dots (x, coded)
-      if (isDots === 2) dirs.pop ()
-      else if (!isDots) dirs.push (x)
+      // TODO redo this, neatly
+      if (isDots === 0) dirs.push (x)
+      else if (isDots === 2) {
+        if (dirs.length && dirs[dirs.length-1] !== '..') dirs.pop ()
+        else if (!url.root) dirs.push ('..')
+      } 
     }
     if (dirs.length) r.dirs = dirs
     else if (ord (url) === ords.dir) r.dirs = ['.']
