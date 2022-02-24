@@ -9,7 +9,9 @@ all: dist/spec-url.min.js
 
 test: test/run/urltestdata.json
 	@ echo ""
-	@ node test/run.js
+	@ node test/run-relative-tests.js
+	@ echo ""
+	@ node test/run-wpt-tests.js
 	@ echo ""
 
 clean: testclean distclean

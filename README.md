@@ -40,13 +40,27 @@ If present, **dirs** is an non-empty array of strings; **host** is a _Host_ (see
 
 A _Host_ is either an ipv6 address, a domain, an ipv4 address, or an opaque host. In this implementation these are modeled as an array of numbers, an array of strings, a number, or a string, respectively.
 
+<details>
+<summary>Note</summary>
+
+The [URL Specification] models URLs as [ordered sequences of components][URL Model], "with at most one component per type, except for **dir** componens, of which it may have any amount". Futhermore, the **username**, **password**, **host** and **port** are nested inside an **authority** component.
+
+In this this library URLs are modeled as plain JavaScript objects. The **dir** componens, if present, are collected into a single **dirs** _array_, and the **authority**, if present, is expanded by setting any of its **user**, **pass**, **host** and **port** constituents directly on the url object itself. 
+
+There is a one-to-one correspondence between this representation and sequences of components as defined in the URL specification.
+</details>
+
+[URL Model]: https://alwinb.github.io/url-specification/#url-model
+
 ### Rebase
+
+The _rebase_ function is the preferred method for composing URLs. It can be thought of as a _resolve_ function that adds support for relative URLs.
 
 * ords — { scheme, auth, drive, root, dir, file, query, hash }
 * ord (url)
 * upto (url, ord)
-* rebase (url1, url2)
-* goto (url2, url1) — aka. rebase (url1, url2)
+* rebase (url1, url2) — aka. goto (url2, url1)
+
 
 ### Forcing
 
@@ -56,13 +70,14 @@ Forcing is used to coerce an URL to an absolute URL. Absolute URLs always have a
 * forceAsWebUrl (url)
 * force (url)
 
-### Resolution
+### Resolve
+
+The _resolve_ function is similar to _rebase_ but it always produces an absolute URL, or throws an error if it is unable to do so.
 
 * hasOpaquePath (url)
 * genericResolve (url1, url2) — RFC 3986 _strict_ resolution.
 * legacyResolve (url1, url2) — RFC 3986 _non-strict_ resolution.
-* WHATWGResolve (url1, url2)
-* resolve (url1, url2) — aka. WHATWGResolve
+* resolve (url1 [, url2]) — aka. WHATWGResolve
 
 ### Normalisation
 
@@ -79,6 +94,7 @@ Forcing is used to coerce an URL to an absolute URL. Absolute URLs always have a
 * parseHost (string-or-host)
 * parseWebHost (string-or-host)
 * validateOpaqueHost (string)
+* parseRebase (string [, base-url-or-string])
 
 ### Printing
 
@@ -101,26 +117,18 @@ Forcing is used to coerce an URL to an absolute URL. Absolute URLs always have a
 
 ### Parse Resolve and Normalise
 
-* WHATWGParseResolve (string, base-string)
-* parseResolve (string, base-string) — aka. WHATWGParseResolve
-
-
-A Note - URL Objects
---------------------
-
-The [URL Specification] models URLs as [ordered sequences of components][URL Model], "with at most one component per type, except for **dir** componens, of which it may have any amount". Futhermore, the **username**, **password**, **host** and **port** are nested inside an **authority** component.
-
-This representation works well for the specification. But for implementations it makes sense to model URLs as records or objects instead. 
-
-In this this library URLs are modeled as plain JavaScript objects. The **dir** componens, if present, are collected into a single **dirs** _array_, and the **authority**, if present, is expanded by setting any of its **user**, **pass**, **host** and **port** constituents directly on the url object itself. 
-
-There is a one-to-one correspondence between this representation and sequences of componens as defined in the URL specification.
-
-[URL Model]: https://alwinb.github.io/url-specification/#url-model
+* parseResolve (string [, base-url-or-string]) — aka. WHATWGParseResolve
 
 
 Changelog
 ---------
+
+### Version 2.3.2-dev
+
+- The rebase function now distinguishes URLs by their scheme akin to (WHATWG) resolve. 
+- Dotted file-segments are now parsed as dir segments.
+- Corrects a mistake where path normalisation could result in an empty URL.
+- Corrects a mistake where path normalisation would incorrectly discard leading double-dot segments.
 
 ### Version 2.3.1-dev
 
