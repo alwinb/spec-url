@@ -123,6 +123,15 @@ The _resolve_ function is similar to _rebase_ but it always produces an absolute
 Changelog
 ---------
 
+### Forthcoming
+
+Work has started on a simple API wrapper.
+
+### Version 2.3.3-dev
+
+- Exports the printHost function.
+- Restores genericResolve to its pre 2.3.2-dev behaviour.
+
 ### Version 2.3.2-dev
 
 - The rebase function now distinguishes URLs by their scheme akin to (WHATWG) resolve. 
