@@ -204,7 +204,7 @@ const hasOpaquePath = url =>
 // 'Strict' Reference Resolution according to RFC3986
 
 const genericResolve = (url, base) => {
-  if (url.scheme || base.scheme) return rebase (url, base)
+  if (url.scheme || base.scheme) return _rebase (url, base)
   else throw new ResolveError (url1, url2)
 }
 
@@ -378,7 +378,8 @@ const percentDecode = url => {
   for (let k in tags) if (url[k] != null)
     r[k] = _dont [k] ? url[k]
       : k === 'dirs' ? url[k] .map (pct.decode)
-      : pct.decode (url[k])
+      : typeof url[k] === 'string' ? pct.decode (url[k])
+      : url[k]
   return r
 }
 
@@ -634,7 +635,7 @@ export {
   WHATWGParseResolve, WHATWGParseResolve as parseResolve,
 
   ipv4, ipv6,
-  unsafePrint, print,
+  unsafePrint, print, printHost,
   pathname, filePath,
   unstable
 }
