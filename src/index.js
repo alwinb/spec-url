@@ -615,7 +615,7 @@ const WHATWGParseResolve = (input, base) => {
 // Exports
 // =======
 
-const version = '2.3.2-dev'
+const version = '2.3.3-dev'
 const unstable = { utf8, pct, PercentEncoder }
 
 export {
