@@ -161,9 +161,6 @@ const rebase = (url, base) => {
   else throw new RebaseError (url, base)
 }
 
-const goto = (base, url) =>
-  rebase (url, base)
-
 
 // Forcing
 // -------
@@ -668,7 +665,7 @@ export {
   version,
   
   modes, modeFor, 
-  ords, ord, upto, goto, rebase,
+  ords, ord, upto, rebase,
   forceAsFileUrl, forceAsWebUrl, force, 
   hasOpaquePath, genericResolve, legacyResolve,
   WHATWGResolve, WHATWGResolve as resolve,
