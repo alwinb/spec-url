@@ -10,8 +10,24 @@ const log = console.log.bind (console)
 // Model
 // -----
 
+// The components of an URL are ordered by their compoenent-type. 
+// To implement this total order on component-types in javascript,
+// each type is associated with an integer as follows.
+
 const ords =
   { scheme:1, auth:2, drive:3, root:4, dir:5, file:6, query:7, hash:8 }
+
+const isFragment = url =>
+  url.hash != null && ord (url) === ords.hash
+
+// Unfortunately URLs have scheme-dependent behaviour, by which URLs
+// can be divided into four groups; currently called 'modes'. 
+// The `noscheme` mode is not specified in the WHATWG standard, but it 
+// is used here to add support for relative-references and/or schemeless
+// URLs. All modes other than `generic` are sometimes called 'special'.
+// (Thus, 'special' is not actually a mode, but a set of three modes).
+// In this implementation, each mode is associated with an individual
+// bit-flag.
 
 const modes =
   { generic:1, noscheme:2, web:4, file:8, special:0b1110 }
@@ -23,9 +39,6 @@ const modeFor = (url, fallback = modes.noscheme) =>
   ( url.scheme ? specials [low (url.scheme)] || modes.generic
   : url.drive ? modes.file
   : fallback )
-
-const isFragment = url =>
-  url.hash != null && ord (url) === ords.hash
 
 const low = str =>
   str ? str.toLowerCase () : str
@@ -59,6 +72,19 @@ const authErrors = (auth, mode = modes.generic) => {
 // Order, Upto and Rebase
 // ----------------------
 
+// "The 'order of an URL' is the type of its first component,
+// or *fragment* if the URL is the empty URL".
+
+// The `ord` function returns the order of an URL, which in this
+// implementation is modeled as an integer as specified in the
+// `ords` map above.
+
+// The `tags` map is an implementation detail; it is used because 
+// in this implementation, URLs are modeled as javascript-
+// objects where the the *user*, *pass*, *host* and *port* sub-
+// components of the *authority* are expanded and assigned directly
+// to the URL (javascript-) object itself.
+
 const tags = {
   scheme:1, user:2, pass:2, host:2, port:2, drive:3,
   root:4, dirs:5, file:6, query:7, hash:8
@@ -70,6 +96,10 @@ const ord = url => {
   return ords.hash
 }
 
+// The `upto` function returns a 'prefix' of an URL, specifically,
+// it returns an URL that consists of all components that have a
+// component-type < ord, and all *dir* components if *dir* ≤ ord.
+
 const upto = (url, ord) => {
   const r = { }
   for (const k in tags)
@@ -79,6 +109,12 @@ const upto = (url, ord) => {
       r[k] = url[k] .slice (0)
   return r
 }
+
+// The `_rebase` function is the heart of the reference-
+// resolution algorithm. It implements a generalised version
+// of URL resolution that adds supports for schemeless URLs.
+// It does however not implement the special behaviour of
+// special URLs, which is covered later.
 
 const _rebase = (url, base) => {
   const r = upto (base, ord (url))
@@ -103,8 +139,19 @@ class RebaseError extends TypeError {
   }
 }
 
-// This generalises WHATWGResolve. It makes the same distinctions
-// between file-, web- and opaque-path URLs.
+// The `rebase` function generalises URL resolution as specified
+// by the WHATWG. It makes the same distinctions between file-, web-
+// and opaque-path URLs as the WHATWG standard does.
+
+// It uses what RFC3986 refers to as a 'non-strict' transformation
+// of references for 'special' URLs: The scheme of the reference is
+// ignored if it matches the scheme of the base URL. It uses the
+// 'strict' behaviour for all other URLs.
+
+// Note that opaque-paths are currently not modeled, nor implemented
+// by using a separate *opaque-path* component-type. Instead they are
+// detected by looking at the shape of the URL. 
+// I am considering to change this.
 
 const rebase = (url, base) => {
   if (url.scheme && modeFor (url) & modes.special && low (url.scheme) === low (base.scheme))

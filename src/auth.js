@@ -4,8 +4,18 @@ const log = console.log.bind (console)
 // ### Authority Parsing
 
 // (c) The credentials sigil is the last "@" - if any.
+// If it is present then the authority has a username.
+
 // (w) The password sigil is the first ":" before (c).
-// (p) The port sigil is the first ":" after (c).
+// If it is present then the authority has a password.
+
+// (p) The port sigil is the first ":" over-all, or 
+// after (c) if (c) is present. If (p) is present then
+// the authority as a port.
+
+// The algorithm makes a single pass from left to right over the input
+// to find the positions of the sigils. It uses -1 to indicate absence
+// for (c) and (w) and it uses input.length to indicate absence of (p).
 
 // NB This does *not* parse the domain. The host property of
 // the return value is either an ipv6 address or an opaque host.
@@ -59,6 +69,9 @@ function parseAuth (input) {
 }
 
 // ### Port
+
+// A port may either be the empty string, or the decimal representation
+// of a number n < 2**16.
 
 const parsePort = input => {
   if (input === '') return input
