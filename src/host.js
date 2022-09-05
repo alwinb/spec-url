@@ -1,6 +1,5 @@
 import { pct } from './pct.js'
-import punycode from 'punycode'
-const log = console.log.bind (console)
+import tr46 from 'tr46'
 
 
 // Host Model
@@ -41,15 +40,34 @@ const validateOpaqueHost = (input, percentCoded = true) => {
 
 // NB parseDomain returns a domain **or an ipv4 address**.
 
+const toUniodeOptions = {
+  checkBidi: true,
+  checkHyphens:false,
+  checkJoiners: true,
+  useSTD3ASCIIRules: false,
+  processingOption: "nontransitional",
+}
+
+const toASCIIOptions = {
+  checkBidi: true,
+  checkHyphens: false,
+  checkJoiners: true,
+  useSTD3ASCIIRules: false,
+  processingOption: 'nontransitional',
+  verifyDNSLength: false // REVIEW
+}
+
 function parseDomain (input, percentCoded = true) {
   let r = percentCoded ? pct.decode (input) : input
-  r = punycode.toUnicode (nameprep (r))
-  const address = ipv4.parse (r)
+  const { domain, error } = tr46.toUnicode (r, toUniodeOptions)
+  if (error)
+    throw new Error (`Invalid domain-string "${input}"`)
+  const address = ipv4.parse (domain)
   if (address != null) return address
-  if (r === '') throw new Error ('Invalid domain-string')
-  if (_endsInNumber.test (r)) throw new Error ('Invalid doimain-string')
-  if (_isDomainString.test (r)) return r.split ('.')
-  throw new Error (`Invalid domain-string "${input}"`)
+  if (domain === '' || _endsInNumber.test (domain))
+    throw new Error ('Invalid doimain-string')
+  if (_isDomainString.test (domain)) return domain.split ('.')
+    throw new Error ('Invalid domain-string')
 }
 
 
@@ -198,6 +216,14 @@ const ipv6 = {
 
 // TODO clean this up, implement it properly.
 
+const domainToASCII = domain => {
+  const domainString = domain.join ('.')
+  const ASCIIString = tr46.toASCII (domainString, toASCIIOptions)
+  if (ASCIIString != null)
+    return tr46.toASCII (domainString, toASCIIOptions) .split ('.')
+  else log (domain, ASCIIString)
+}
+
 const _isASCIIString =
   /^[\0-\x7E]*$/
 
@@ -210,40 +236,9 @@ const _isDomainString =
 const _endsInNumber =
   /(^|[.])([0-9]+|0[xX][0-9A-Fa-f]*)[.]?$/
 
-const punyEncode = domain => 
-  domain.map (label => 
-    _isASCIIString.test (label) ? label
-      : 'xn--' + punycode.encode (label))
-
-// 'IDNA/ Nameprep' - just a small part of it for now
-
-const tableB1 =
-  /[\u00AD\u034F\u1806\uFEFF\u2060\u180B-\u180D\u200B-\u200D\uFE00-\uFE0F]/g
-
-const tableC6 =
-  /[\uFFF9-\uFFFD]/g
-
-function nameprep (input) {
-  tableC6.lastIndex = tableB1.lastIndex = 0
-  input = input
-    .replace (tableB1, '')
-    .normalize ('NFKC')
-    .toLowerCase ()
-  for (let c of input) {
-    c = c.codePointAt (0)
-    const nonchar = 0xFDD0 <= c && c <= 0xFDEF || 
-      (c <= 0x10FFFF && ((c >> 1) & 0x7FFF) === 0x7FFF)
-    if (nonchar)
-      throw new Error ('Nameprep: Invalid code point')
-  }
-  if (tableC6 .test (input))
-    throw new Error ('Nameprep: Invalid code point')
-  return input
-}
-
 
 
 // Exports
 // =======
 
-export { ipv6, ipv4, types as hostTypes, hostType, parseHost, parseWebHost, validateOpaqueHost, printHost, parseDomain, punyEncode }
+export { ipv6, ipv4, types as hostTypes, hostType, parseHost, parseWebHost, validateOpaqueHost, printHost, parseDomain, domainToASCII }

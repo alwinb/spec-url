@@ -25,6 +25,6 @@
   "author": "Alwin Blok",
   "license": "MIT",
   "dependencies": {
-    "punycode": "^2.1.1"
+    "tr46": "^3.0.0"
   }
 }

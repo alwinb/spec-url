@@ -1,6 +1,5 @@
-import punycode from 'punycode'
 import { parseAuth } from './auth.js'
-import { hostType, hostTypes, parseHost, parseWebHost, validateOpaqueHost, printHost, punyEncode, ipv6, ipv4 } from './host.js'
+import { hostType, hostTypes, parseHost, parseWebHost, validateOpaqueHost, printHost, domainToASCII, ipv6, ipv4 } from './host.js'
 import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
@@ -336,7 +335,7 @@ const percentEncode = (url, spec = 'WHATWG') => {
     r.host
       = t === hostTypes.ipv6 ? [...url.host]
       : t === hostTypes.ipv4 ? url.host
-      : t === hostTypes.domain ? (unicode ? [...url.host] : punyEncode (url.host))
+      : t === hostTypes.domain ? (unicode ? [...url.host] : domainToASCII (url.host))
       : t === hostTypes.opaque ? encode (url.host, profile.host)
       : url.host
   }

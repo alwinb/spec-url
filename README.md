@@ -207,6 +207,7 @@ Licence
 
 - Code original to this project is MIT licenced, copyright Alwin Blok.
 - The [punycode.js] library is MIT licenced, copyright Mathias Bynens.
+- The [tr46.js] library is MIT, copyright Sebastian Mayr.
 
 [spec-url]: https://github.com/alwinb/spec-url
 [punycode.js]: https://github.com/mathiasbynens/punycode.js
