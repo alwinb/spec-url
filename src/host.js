@@ -214,7 +214,7 @@ const ipv6 = {
 // Domains
 // -------
 
-// TODO clean this up, implement it properly.
+// TODO last bits of cleanup.
 
 const domainToASCII = domain => {
   const domainString = domain.join ('.')

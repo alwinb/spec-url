@@ -10,21 +10,40 @@ const log = console.log.bind (console)
 // Model
 // -----
 
-// The components of an URL are ordered by their compoenent-type. 
-// To implement this total order on component-types in javascript,
-// each type is associated with an integer as follows.
+// In the URL specification, URLs are modeled as specific sequences
+// of components, ordered by component-type. To implement the order
+// in javascript, each component-type is associated with an integer
+// as follows.
 
 const ords =
   { scheme:1, auth:2, drive:3, root:4, dir:5, file:6, query:7, hash:8 }
 
-const isFragment = url =>
-  url.hash != null && ord (url) === ords.hash
+// In this implementation, URLs however are modeled as javascript-
+// _objects_ with optional attributes: *scheme*, *user*, *pass*, *host*,
+// *port*, *drive*, *root*, *dirs*, *file*, *query* and *hash*. 
+// Thus, the *dir* components, if present, are collected into a nonempty
+// *dirs* _array_, and the *authority*, subcomponents *user*, *pass*,
+// *host* and *port* are assigned directly on the URL object itself. 
+// Thus, the `tags` map contains the order for each of the attributes:
 
-// Unfortunately URLs have scheme-dependent behaviour, by which URLs
-// can be divided into four groups; currently called 'modes'. 
-// The `noscheme` mode is not specified in the WHATWG standard, but it 
-// is used here to add support for relative-references and/or schemeless
-// URLs. All modes other than `generic` are sometimes called 'special'.
+const tags = {
+  scheme:1, user:2, pass:2, host:2, port:2, drive:3,
+  root:4, dirs:5, file:6, query:7, hash:8
+}
+
+// The empty _authority_ is represented by setting the host attribute
+// to the empty string. Otherewise, the host is either an ipv6 address,
+// a domain, an ipv4 address, or an opaque host. In this implementation
+// these are  modeled as an array of numbers, an array of strings, a
+// number, or a string, respectively.
+
+// ### Modes
+
+// URLs have scheme-dependent behaviour that divides them into four
+// categories, called 'modes' here. The `noscheme` mode is not specified
+// in the WHATWG standard. It is used here to signify behaviour that is
+// fine-tuned for schemeless URLs / relative references.
+// All modes other than the `generic` mode are said to be 'special'. 
 // (Thus, 'special' is not actually a mode, but a set of three modes).
 // In this implementation, each mode is associated with an individual
 // bit-flag.
@@ -35,10 +54,19 @@ const modes =
 const specials =
   { http:4, https:4, ws:4, wss:4, ftp:4, file:8 }
 
+// The mode to be used for schemeless URLs can be manually specified, 
+// by supplying a 'fallback' mode. It uses the built-in noscheme- 
+// mode as a default.
+
 const modeFor = (url, fallback = modes.noscheme) =>
   ( url.scheme ? specials [low (url.scheme)] || modes.generic
   : url.drive ? modes.file
   : fallback )
+
+// isFragment and low are just small helper functions.
+
+const isFragment = url =>
+  url.hash != null && ord (url) === ords.hash
 
 const low = str =>
   str ? str.toLowerCase () : str
@@ -72,23 +100,12 @@ const authErrors = (auth, mode = modes.generic) => {
 // Order, Upto and Rebase
 // ----------------------
 
-// "The 'order of an URL' is the type of its first component,
-// or *fragment* if the URL is the empty URL".
+// "The 'order of an URL' is the type of its first component, or
+// *fragment* (here: *hash*) if the URL is the empty URL".
 
-// The `ord` function returns the order of an URL, which in this
-// implementation is modeled as an integer as specified in the
-// `ords` map above.
-
-// The `tags` map is an implementation detail; it is used because 
-// in this implementation, URLs are modeled as javascript-
-// objects where the the *user*, *pass*, *host* and *port* sub-
-// components of the *authority* are expanded and assigned directly
-// to the URL (javascript-) object itself.
-
-const tags = {
-  scheme:1, user:2, pass:2, host:2, port:2, drive:3,
-  root:4, dirs:5, file:6, query:7, hash:8
-}
+// The `ord` function here returns the order of an URL, which in this
+// implementation is modeled as an integer as specified in the `ords`
+// and `tags` maps above.
 
 const ord = url => {
   for (const k in tags)
@@ -110,13 +127,12 @@ const upto = (url, ord) => {
   return r
 }
 
-// The `_rebase` function is the heart of the reference-
-// resolution algorithm. It implements a generalised version
-// of URL resolution that adds supports for schemeless URLs.
-// It does however not implement the special behaviour of
-// special URLs, which is covered later.
+// The `rebase` function is the heart of the reference-resolution
+// algorithm. It implements a generalised version of URL resolution
+// that adds supports for schemeless URLs. It does however not implement
+// the special behaviour of special URLs, which is covered later.
 
-const _rebase = (url, base) => {
+const pureRebase = (url, base) => {
   const r = upto (base, ord (url))
   for (const k in tags)
     if (url[k] == null) continue
@@ -133,33 +149,38 @@ const _rebase = (url, base) => {
 // Rebase
 // ------
 
+// The `WHATWGRebase` function generalises URL resolution as specified
+// by the WHATWG. It makes the same distinctions between file-, web-
+// and opaque-path URLs as the WHATWG standard does.
+
+// It uses what RFC3986 describes as 'non-strict' transformation of
+// references, for the 'special' URLs: If the input has a scheme and
+// the scheme matches that of the base URL, then it is ignored.
+// It then continues to use the 'strict' behaviour, which is implemented
+// in the `pureRebase` function.
+
+// Note that opaque-paths are currently not modeled, nor implemented
+// by using a separate *opaque-path* component-type. Instead they are
+// detected by looking at the shape of the URL.
+
 class RebaseError extends TypeError {
   constructor (url1, url2) {
     super (`Cannot rebase <${print(url1)}> onto <${print(url2)}>`)
   }
 }
 
-// The `rebase` function generalises URL resolution as specified
-// by the WHATWG. It makes the same distinctions between file-, web-
-// and opaque-path URLs as the WHATWG standard does.
-
-// It uses what RFC3986 refers to as a 'non-strict' transformation
-// of references for 'special' URLs: The scheme of the reference is
-// ignored if it matches the scheme of the base URL. It uses the
-// 'strict' behaviour for all other URLs.
-
-// Note that opaque-paths are currently not modeled, nor implemented
-// by using a separate *opaque-path* component-type. Instead they are
-// detected by looking at the shape of the URL. 
-// I am considering to change this.
-
-const rebase = (url, base) => {
+const WHATWGRebase = (url, base) => {
   if (url.scheme && modeFor (url) & modes.special && low (url.scheme) === low (base.scheme))
     url = setProto ({ scheme:null }, url)
   if (url.scheme || isFragment (url) || !hasOpaquePath (base))
-    return _rebase (url, base)
+    return pureRebase (url, base)
   else throw new RebaseError (url, base)
 }
+
+// Opaque paths - WHATWG specific
+
+const hasOpaquePath = url =>
+  url.root == null && url.host == null && modeFor (url) === modes.generic
 
 
 // Forcing
@@ -239,15 +260,10 @@ class ResolveError extends TypeError {
   }
 }
 
-// Opaque paths - WHATWG specific
-
-const hasOpaquePath = url =>
-  url.root == null && url.host == null && modeFor (url) === modes.generic
-
 // 'Strict' Reference Resolution according to RFC3986
 
 const genericResolve = (url, base) => {
-  if (url.scheme || base.scheme) return _rebase (url, base)
+  if (url.scheme || base.scheme) return pureRebase (url, base)
   else throw new ResolveError (url1, url2)
 }
 
@@ -264,7 +280,7 @@ const legacyResolve = (url, base) => {
 
 const WHATWGResolve = (url, base) =>
   base == null ? force (url)
-  : force (rebase (url, base))
+  : force (WHATWGRebase (url, base))
 
 
 
@@ -645,7 +661,7 @@ const parseRebase = (input, base) => {
   if (base == null) return parse (input)
   if (typeof base === 'string') base = parse (base)
   const url = parse (input, modeFor (base))
-  return rebase (url, base)
+  return WHATWGRebase (url, base)
 }
 
 const WHATWGParseResolve = (input, base) => {
@@ -665,7 +681,7 @@ export {
   version,
   
   modes, modeFor, 
-  ords, ord, upto, rebase,
+  ords, ord, upto, pureRebase, WHATWGRebase,
   forceAsFileUrl, forceAsWebUrl, force, 
   hasOpaquePath, genericResolve, legacyResolve,
   WHATWGResolve, WHATWGResolve as resolve,

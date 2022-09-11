@@ -11,7 +11,7 @@ const log = console.log.bind (console)
 
 // (p) The port sigil is the first ":" over-all, or 
 // after (c) if (c) is present. If (p) is present then
-// the authority as a port.
+// the authority has a port.
 
 // The algorithm makes a single pass from left to right over the input
 // to find the positions of the sigils. It uses -1 to indicate absence
@@ -81,5 +81,8 @@ const parsePort = input => {
   }
   throw new Error (`Invalid port-string: "${input}"`)
 }
+
+
+// Exports
 
 export { parseAuth, parsePort }
