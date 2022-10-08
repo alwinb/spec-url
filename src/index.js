@@ -7,66 +7,58 @@ const log = console.log.bind (console)
 // URL Core
 // ========
 
-// Model
-// -----
+// In the URL specification, URLs are modeled as ordered sequences
+// of components, where the components are ordered by their
+// component-type as follows.
 
-// In the URL specification, URLs are modeled as specific sequences
-// of components, ordered by component-type. To implement the order
-// in javascript, each component-type is associated with an integer
-// as follows.
-
-const ords =
+const componentTypes =
   { scheme:1, auth:2, drive:3, root:4, dir:5, file:6, query:7, hash:8 }
 
-// In this implementation, URLs however are modeled as javascript-
-// _objects_ with optional attributes: *scheme*, *user*, *pass*, *host*,
-// *port*, *drive*, *root*, *dirs*, *file*, *query* and *hash*. 
-// Thus, the *dir* components, if present, are collected into a nonempty
-// *dirs* _array_, and the *authority*, subcomponents *user*, *pass*,
-// *host* and *port* are assigned directly on the URL object itself. 
-// Thus, the `tags` map contains the order for each of the attributes:
+// All components are optional, but if an URL has a host or a
+// drive, and it also has one or more dir or file components,
+// then it also has a root component.
 
-const tags = {
-  scheme:1, user:2, pass:2, host:2, port:2, drive:3,
-  root:4, dirs:5, file:6, query:7, hash:8
-}
+// In this implementation however, URLs are modeled as javascript
+// _objects_ with optional attributes. The dir components are collected
+// into a nonempty `dirs`-_array_ instead and the authority subcomponents
+// are assigned directly on the object itself as `user`, `pass`, `host` and
+// `port`. The empty authority is represented by setting the `host` attribute
+// to the empty string. 
 
-// The empty _authority_ is represented by setting the host attribute
-// to the empty string. Otherewise, the host is either an ipv6 address,
+// Otherwise the `host` is either an ipv6 address,
 // a domain, an ipv4 address, or an opaque host. In this implementation
-// these are  modeled as an array of numbers, an array of strings, a
-// number, or a string, respectively.
+// these are modeled as an array of numbers, an array of strings, a number,
+// or a string, respectively.
 
 // ### Modes
 
 // URLs have scheme-dependent behaviour that divides them into four
-// categories, called 'modes' here. The `noscheme` mode is not specified
-// in the WHATWG standard. It is used here to signify behaviour that is
-// fine-tuned for schemeless URLs / relative references.
-// All modes other than the `generic` mode are said to be 'special'. 
-// (Thus, 'special' is not actually a mode, but a set of three modes).
-// In this implementation, each mode is associated with an individual
-// bit-flag.
+// categories, called `modes` here. The `noscheme` mode is used
+// to select behaviour that is fine-tuned for schemeless URLs.
+// In this implementation, each mode is associated with a bit-flag.
+// All modes other than the `generic` mode are said to be `special`. 
+// Thus, `special` here is not actually a mode, but a set of three modes.
 
 const modes =
   { generic:1, noscheme:2, web:4, file:8, special:0b1110 }
 
-const specials =
+const specialSchemes =
   { http:4, https:4, ws:4, wss:4, ftp:4, file:8 }
 
-// The mode to be used for schemeless URLs can be manually specified, 
-// by supplying a 'fallback' mode. It uses the built-in noscheme- 
-// mode as a default.
+// The `modeFor` function returns the mode for a given URL object
+// based on its scheme. The mode to be used for schemeless URLs can
+// be manually overridden by specifying a fallback mode. It defaults
+// to the `noscheme` mode.
 
 const modeFor = (url, fallback = modes.noscheme) =>
-  ( url.scheme ? specials [low (url.scheme)] || modes.generic
+  ( url.scheme ? specialSchemes [low (url.scheme)] || modes.generic
   : url.drive ? modes.file
   : fallback )
 
-// isFragment and low are just small helper functions.
+// isFragment and low are simple helper functions.
 
 const isFragment = url =>
-  url.hash != null && ord (url) === ords.hash
+  url.hash != null && ord (url) === componentTypes.hash
 
 const low = str =>
   str ? str.toLowerCase () : str
@@ -96,72 +88,71 @@ const authErrors = (auth, mode = modes.generic) => {
 }
 
 
-
-// Order, Upto and Rebase
-// ----------------------
+// Order and Upto
+// --------------
 
 // "The 'order of an URL' is the type of its first component, or
-// *fragment* (here: *hash*) if the URL is the empty URL".
+// fragment (here: hash) if the URL is the empty URL".
 
-// The `ord` function here returns the order of an URL, which in this
-// implementation is modeled as an integer as specified in the `ords`
-// and `tags` maps above.
+// The `ord` function returns the order of an URL.
 
-const ord = url => {
-  for (const k in tags)
-    if (url[k] != null) return tags[k]
-  return ords.hash
+const attributeNames = {
+  scheme:1, user:2, pass:2, host:2, port:2, drive:3,
+  root:4, dirs:5, file:6, query:7, hash:8
 }
 
-// The `upto` function returns a 'prefix' of an URL, specifically,
-// it returns an URL that consists of all components that have a
-// component-type < ord, and all *dir* components if *dir* ≤ ord.
+const ord = url => {
+  for (const k in attributeNames)
+    if (url[k] != null) return attributeNames[k]
+  return componentTypes.hash
+}
+
+// The `upto` function returns a prefix of an URL. Specifically,
+// it returns an URL that consists of all components that have
+// a component-type < ord, and all dir components if
+// dir ≤ ord.
 
 const upto = (url, ord) => {
   const r = { }
-  for (const k in tags)
+  for (const k in attributeNames)
     if (url[k] == null) continue
-    else if (tags[k] < ord) r[k] = url[k]
-    else if (tags[k] === ord && k === 'dirs')
+    else if (attributeNames[k] < ord) r[k] = url[k]
+    else if (attributeNames[k] === ord && k === 'dirs')
       r[k] = url[k] .slice (0)
   return r
 }
 
+// Rebase
+// ------
 // The `rebase` function is the heart of the reference-resolution
 // algorithm. It implements a generalised version of URL resolution
 // that adds supports for schemeless URLs. It does however not implement
-// the special behaviour of special URLs, which is covered later.
+// the exceptional behaviour for special URLs as defined by the WHATWG,
+// which will be added later.
 
 const pureRebase = (url, base) => {
   const r = upto (base, ord (url))
-  for (const k in tags)
+  for (const k in attributeNames)
     if (url[k] == null) continue
     else if (k === 'dirs')
-      r.dirs = (r.dirs || []) .concat (url.dirs)
+      r.dirs = (r.dirs ?? []) .concat (url.dirs)
     else r[k] = url[k]
-  // Patch up root if needed
+  /* Patch up root if needed */
   if ((r.host != null || r.drive) && (r.dirs || r.file))
     r.root = '/'
   return r
 }
 
+// The `WHATWGRebase` function is a generalisation of the URL
+// resolution behaviour that is implicitly specified by the WHATWG.
+// It makes the same distinctions between file-, web- and opaque-path
+// URLs as the WHATWG standard does, but it also supports schemeless URLs.
 
-// Rebase
-// ------
-
-// The `WHATWGRebase` function generalises URL resolution as specified
-// by the WHATWG. It makes the same distinctions between file-, web-
-// and opaque-path URLs as the WHATWG standard does.
-
-// It uses what RFC3986 describes as 'non-strict' transformation of
-// references, for the 'special' URLs: If the input has a scheme and
-// the scheme matches that of the base URL, then it is ignored.
-// It then continues to use the 'strict' behaviour, which is implemented
-// in the `pureRebase` function.
-
-// Note that opaque-paths are currently not modeled, nor implemented
-// by using a separate *opaque-path* component-type. Instead they are
-// detected by looking at the shape of the URL.
+// It uses what RFC3986 calls the 'non-strict' transformation of
+// references (section 5.2) for 'special' URLs: If the input has a scheme
+// and the scheme is equivalent to the scheme of the base URL, then it is
+// removed. It then continues with the 'strict' behaviour as implemented
+// by the `pureRebase` function.
 
 class RebaseError extends TypeError {
   constructor (url1, url2) {
@@ -177,7 +168,9 @@ const WHATWGRebase = (url, base) => {
   else throw new RebaseError (url, base)
 }
 
-// Opaque paths - WHATWG specific
+// Note: opaque-paths are currently not modeled, nor implemented
+// by using a separate *opaque-path* component-type. Instead they are
+// detected by looking at the shape of the URL as follows.
 
 const hasOpaquePath = url =>
   url.root == null && url.host == null && modeFor (url) === modes.generic
@@ -186,9 +179,13 @@ const hasOpaquePath = url =>
 // Forcing
 // -------
 
+// The WHATWG standard specifies URL resolution behaviour that deviates
+// from RFC3986. This behaviour is implemented via an additional `force`
+// operation.
+
 class ForceError extends TypeError {
   constructor (url) {
-    super (`Cannot coerce <${print(url)}> to a base-URL`)
+    super (`Cannot coerce <${print(url)}> to an absolute URL`)
     this.url = url
   }
 }
@@ -233,19 +230,19 @@ const force = url => {
 const _firstNonEmptySegment = url => {
   const dirs = url.dirs || []
   for (let i=0, l=dirs.length; i<l;i++) if (dirs[i])
-    return { value:dirs[i], ord:ords.dir, index:i }
+    return { value:dirs[i], ord:componentTypes.dir, index:i }
   if (url.file)
-    return { value:url.file, ord:ords.file }
+    return { value:url.file, ord:componentTypes.file }
   throw null // not found
 }
 
 const _removeSegments = (url, match) => {
-  if (match.ord === ords.dir) {
+  if (match.ord === componentTypes.dir) {
     const dirs_ = url.dirs.slice (match.index + 1)
     if (dirs_.length) url.dirs = dirs_
     else delete url.dirs
   }
-  else if (match.ord === ords.file)
+  else if (match.ord === componentTypes.file)
     delete url.file
   return url
 }
@@ -259,24 +256,6 @@ class ResolveError extends TypeError {
     super (`Cannot resolve <${print(url1)}> against <${print(url2)}>`)
   }
 }
-
-// 'Strict' Reference Resolution according to RFC3986
-
-const genericResolve = (url, base) => {
-  if (url.scheme || base.scheme) return pureRebase (url, base)
-  else throw new ResolveError (url1, url2)
-}
-
-// 'Non-strict' Reference Resolution according to RFC3986
-
-const legacyResolve = (url, base) => {
-  if (url.scheme && low (url.scheme) === low (base.scheme))
-    ( base = setProto ({ scheme:url.scheme }, base)
-    , url = setProto ({ scheme:null }, url) )
-  return genericResolve (url, base)
-}
-
-// WHATWG style reference resolution
 
 const WHATWGResolve = (url, base) =>
   base == null ? force (url)
@@ -327,7 +306,7 @@ const normalise = (url, coded = true) => {
       } 
     }
     if (dirs.length) r.dirs = dirs
-    else if (ord (url) === ords.dir) r.dirs = ['.']
+    else if (ord (url) === componentTypes.dir) r.dirs = ['.']
     else delete r.dirs
   }
 
@@ -339,7 +318,7 @@ const normalise = (url, coded = true) => {
   else if (url.port === defaultPorts [scheme])
     delete r.port
 
-  for (const k in tags)
+  for (const k in attributeNames)
     if (r[k] == null) delete r[k]
   return r
 }
@@ -434,7 +413,7 @@ const percentEncode = (url, spec = 'WHATWG') => {
 const _dont = { scheme:1, port:1, drive:1, root:1 }
 const percentDecode = url => {
   const r = { }
-  for (let k in tags) if (url[k] != null)
+  for (let k in attributeNames) if (url[k] != null)
     r[k] = _dont [k] ? url[k]
       : k === 'dirs' ? url[k] .map (pct.decode)
       : typeof url[k] === 'string' ? pct.decode (url[k])
@@ -467,10 +446,10 @@ const print = (url, spec = 'minimal') => {
   // prevent accidentally producing a scheme
 
   let match
-  if (ord (url) === ords.dir && (match = isSchemeLike.exec (url.dirs[0])))
+  if (ord (url) === componentTypes.dir && (match = isSchemeLike.exec (url.dirs[0])))
     url.dirs[0] = match[1] + '%3A' + match[2]
 
-  if (ord (url) === ords.file && (match = isSchemeLike.exec (url.file)))
+  if (ord (url) === componentTypes.file && (match = isSchemeLike.exec (url.file)))
     url.file = match[1] + '%3A' + match[2]
 
   // TODO prevent accidentally producing a drive
@@ -492,7 +471,7 @@ const filePath = ({ drive, root, dirs, file }) =>
 const unsafePrint = url => {
   let result = ''
   const hasCredentials = url.user != null
-  for (const k in tags) if (url[k] != null) {
+  for (const k in attributeNames) if (url[k] != null) {
     const v = url[k]
     result +=
       k === 'scheme' ? ( v + ':') :
@@ -681,10 +660,9 @@ export {
   version,
   
   modes, modeFor, 
-  ords, ord, upto, pureRebase, WHATWGRebase,
+  componentTypes, ord, upto, pureRebase, WHATWGRebase,
   forceAsFileUrl, forceAsWebUrl, force, 
-  hasOpaquePath, genericResolve, legacyResolve,
-  WHATWGResolve, WHATWGResolve as resolve,
+  hasOpaquePath, WHATWGResolve, WHATWGResolve as resolve,
 
   normalise, normalise as normalize,
   percentEncode, percentDecode,
