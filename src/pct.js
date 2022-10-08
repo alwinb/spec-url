@@ -181,7 +181,8 @@ const minimal = {
 }
 
 // Minimal Special
-// Likewise, but also encodes "\" before the query.
+// Likewise, but also encodes "\" before the query
+// and "'" in the query.
 
 const minimal_special = {
   user:  nl_tab | sets.user  | s,

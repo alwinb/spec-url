@@ -122,10 +122,15 @@ export default [
     base: 'sch:opaque',
     failure: true,
   },
+  {
+    input: '#fragment',
+    base: 'sch:opaque',
+    href: 'sch:opaque#fragment',
+  },
 
   // Non-special URLs that do not have path components
   // behave likewise. They can be thought of as having
-  // an empty opaque path.
+  // an empty opaque path. // REVIEW
   {
     input: '/foo/bar',
     base: 'sch:',
@@ -154,7 +159,8 @@ export default [
   // The input is not *resolved* against the base, instead it
   // is _rebased_ on the base. The difference is that _resolve_
   // always produces an absolute URL, and _rebase_ may not.
-  // Specifically, the folowing URLs are valid relative URLs:
+  // NB the folowing special URLs are valid *relative* URLs,
+  // even though they have a scheme! I will explain why, below.
   {
     input: 'http:foo',
     href: 'http:foo',
@@ -201,7 +207,7 @@ export default [
   // If they are resolved (or rebased) onto a special URL with a matching
   // scheme, then the host is taken from the base URL. This is called
   // non-strict resolution in RFC 3986 and the WHATWG only uses this
-  // behaviour with special URLs.
+  // behaviour for special URLs.
   {
     input: 'http:foo',
     base: 'http://host',
@@ -299,7 +305,7 @@ export default [
     href: 'http:'
   },
 
-  // Path normalisation should not result in an empty URL.
+  // Path normalisation should not result in an empty URL:
   {
     input: 'foo/..',
     href: './'
@@ -313,7 +319,7 @@ export default [
     href: './'
   },
 
-  // Relative paths can have leading .. segments
+  // Relative paths can have leading .. segments:
   {
     input: '..',
     href: '../'
@@ -327,13 +333,13 @@ export default [
     href: '../../b'
   },
 
-  // Relative paths cannot have .. segments otherwise
+  // Relative paths (normalised) cannot have .. segments otherwise:
   {
     input: 'a/./b/../c',
     href: 'a/c'
   },
 
-  // Absolute paths cannot have leading .. segments
+  // Absolute paths (normalised) cannot have leading .. segments:
   {
     input: '/../a/./b',
     href: '/a/b'
