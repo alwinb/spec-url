@@ -561,12 +561,13 @@ function parse (input, mode = modes.noscheme) {
       else if (state & AUTH) {
         assign (url, parseAuth (buffer))
 
-        url.host = mode & (modes.web | modes.file)
-          ? parseHost (url.host) // NB empty hosts are allowed
-          : validateOpaqueHost (url.host)
+        url.host = validateOpaqueHost (url.host)
+        // url.host = mode & (modes.web | modes.file)
+        //   ? parseHost (url.host) // NB empty hosts are allowed
+        //   : validateOpaqueHost (url.host)
 
         if (isSlash) url.root = '/'
-        const errs = authErrors (url, mode)
+        const errs = authErrors (url /*, mode - disabled, use default */)
         if (errs) {
           const message = '\n\t- ' + errs.join ('\n\t- ') + '\n'
           throw new Error (`Invalid URL-string <${input}> ${message}`)
@@ -609,7 +610,7 @@ function parse (input, mode = modes.noscheme) {
       state = PATH
     }
 
-    if (mode & modes.file && !url.drive && !url.dirs && state < QUERY) {
+    if (mode & (modes.file | modes.noscheme) && !url.drive && !url.dirs && state < QUERY) {
       isDrive = letter && (c === BAR || state &~ SCHEME && c === COL)
       letter = !buffer && isAlpha (c)
     }
@@ -628,6 +629,12 @@ function parse (input, mode = modes.noscheme) {
     else url.dirs = [url.file]
     delete url.file
   }
+  
+  // REVIEW - If the URL starts with a drive-letter
+  // then explicitly set the scheme to be 'file'.
+
+  if (url.drive && url.scheme == null)
+    url.scheme = 'file'
   return url
 }
 

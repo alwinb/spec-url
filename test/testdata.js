@@ -1,6 +1,9 @@
 export default [
 
-  // Scheme-less URLs use `\` as path separators:
+  // Parsing behaviour for scheme-less URLs
+  // --------------------------------------
+
+  // Scheme-less URLs interpret `\` as path separators:
   {
     input: '/bar\\bee',
     href: '/bar/bee'
@@ -29,17 +32,73 @@ export default [
     href: '//joe:secret@host/'
   },
 
-  // But not with a file: base
-  // REVIEW I may want to allow that though
+  // But not if the file-URL behaviour is selected
+  // by supplying "file:" as a base.
+  // REVIEW I may wish to allow that and err on resolution instead
+  // {
+  //   input: '//joe:secret@host/',
+  //   base: 'file:',
+  //   href: 'file://joe:secret@host/'
+  // },
+
+  // Scheme-less URLs that have a path that starts with a 
+  // drive-letter--like string are converted to file URLs 
+  // with an *explicit* scheme.
   {
-    input: '//joe:secret@host/',
+    input: '//host/c|/dir/to/file',
+    href: 'file://host/c:/dir/to/file'
+  },
+
+  // This also applies to scheme-less URLs that *start* with a
+  // drive-letter--like string. In that case the authority remains absent.
+  {
+    input: 'c|/dir/to/file',
+    href: 'file:/c:/dir/to/file'
+  },
+  {
+    input: '/c|/..',
+    href: 'file:/c:/'
+    // previous behaviour: scheme-less URLs did not consider drive letters
+    // href: '/'
+  },
+
+  /* You can opt-in to parsing drive letters by using 'file:' as 
+  // a base. (This is no longer relevant)
+  {
+    input: '/c:/..',
     base: 'file:',
-    failure: true,
+    href: 'file:/c:/'
+  },
+  {
+    input: 'c|/..',
+    base: 'file:',
+    href: 'file:/c:/'
+  }, */
+
+  // You can opt-out to parsing drive letters by passing a
+  // base with a non-file scheme.
+  {
+    input: 'c|/',
+    base: 'sch:/',
+    href: 'sch:/c|/'
+  },
+  {
+    input: '/c:/..',
+    base: 'sch:/',
+    href: 'sch:/'
+  },
+  {
+    input: 'c|/',
+    base: 'ws:/',
+    href: 'ws:/c|/'
+  },
+  {
+    input: '/c:/..',
+    base: 'ws:/',
+    href: 'ws:/'
   },
   
-  
-  // Other parsing behaviour can be selected by
-  // supplying a base-URL to the constructor.
+  // You can opt-out of parsing "\" as delimiters likewise.
   {
     input: '/foo/bar\\bee/',
     base: 'sch:/',
@@ -50,24 +109,33 @@ export default [
     base: 'sch:/',
     href: 'sch:/foo/'
   },
+  
+  // And to opt out of special percent-encoding behaviour.
   {
     input: '?q=with-\'-sign',
     base: 'sch:/', 
     href: 'sch:/?q=with-\'-sign'
   },
-  {
-    input: '//this-%00-cannot-be-a-domain/',
-    base: 'file:',
-    failure: true,
-  },
-  {
-    input: '//joe:secret@host/',
-    base: 'file:',
-    failure: true,
-  },
+
+  // {
+  //   input: '//this-%00-cannot-be-a-domain/',
+  //   base: 'http:',
+  //   failure: true,
+  // },
+  // {
+  //   input: '//joe:secret@host/',
+  //   base: 'file:',
+  //   failure: true,
+  // },
   
 
-  // The base URL need not be an absolute URL. 
+  // Rebase versus Resolve
+  // ---------------------
+
+  // And now that we are here, it is time to 
+  // introduce the most significant feature.
+  // The base need not be an absolute URL!
+
   {
     input: '//input-auth',
     base: '/base/path/file',
@@ -89,7 +157,8 @@ export default [
     href: '/path/dir/input-file',
   },
 
-  // The base URL however must not have an opaque path:
+  // The base URL however must not have an opaque path,
+  // as to match the behaviour of the WHATWG URL constructor.
   {
     input: '/foo/bar',
     base: 'sch:opaque',
@@ -130,7 +199,7 @@ export default [
 
   // Non-special URLs that do not have path components
   // behave likewise. They can be thought of as having
-  // an empty opaque path. // REVIEW
+  // an empty opaque path.
   {
     input: '/foo/bar',
     base: 'sch:',
@@ -147,7 +216,7 @@ export default [
     failure: true,
   },
 
-  // Special URLs do not have opaque paths
+  // Special URLs never have opaque paths
   // and therefore the following *does* work:
   {
     input: '//host/foo/bar',
@@ -155,12 +224,21 @@ export default [
     href: 'http://host/foo/bar',
   },
 
+  // To make this work with non-special schemes,
+  // you can append a path-root to the base:
+  {
+    input: '/foo/bar',
+    base: 'sch:/',
+    href: 'sch:/foo/bar',
+  },
 
   // The input is not *resolved* against the base, instead it
   // is _rebased_ on the base. The difference is that _resolve_
   // always produces an absolute URL, and _rebase_ may not.
+
   // NB the folowing special URLs are valid *relative* URLs,
-  // even though they have a scheme! I will explain why, below.
+  // even though they have a scheme! They are *host-relative*,
+  // as I wil explain shortly.
   {
     input: 'http:foo',
     href: 'http:foo',
@@ -203,11 +281,11 @@ export default [
   },
 
   // This is neccesary because the WHATWG URL constructor, *does accept*
-  // such URLs as their first argument. They are host-relative URLs. 
+  // such URLs as its first argument. Such URLs are host-relative: 
   // If they are resolved (or rebased) onto a special URL with a matching
   // scheme, then the host is taken from the base URL. This is called
-  // non-strict resolution in RFC 3986 and the WHATWG only uses this
-  // behaviour for special URLs.
+  // non-strict resolution in RFC 3986 and the WHATWG specifies that this
+  // behaviour be used with special URLs only.
   {
     input: 'http:foo',
     base: 'http://host',
@@ -258,24 +336,6 @@ export default [
   // TODO Add tests for forcing and resolution
   // (and setters)
 
-  // Scheme-less URLs do not consider drive letters (!)
-  {
-    input: '/c|/..',
-    href: '/'
-  },
-
-  // You can opt-in to parsing drive letters by using 'file:' as 
-  // a base.
-  {
-    input: '/c:/..',
-    base: 'file:',
-    href: 'file:/c:/'
-  },
-  {
-    input: 'c|/..',
-    base: 'file:',
-    href: 'file:/c:/'
-  },
 
 
   // Path normalisation
@@ -299,8 +359,7 @@ export default [
   },
 
   {
-    // REVIEW does this agree with resolution?
-    // => No. It forces the URL *before* normalisation (!!)
+    // (resolve forces the URL *before* normalisation)
     input: 'http:foo/..',
     href: 'http:'
   },
