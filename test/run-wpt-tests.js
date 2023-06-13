@@ -23,23 +23,34 @@ class WebTests extends Tests {
 
 const fpath = url.filePath (parseResolve ('run/urltestdata.json', import.meta.url))
 const file = await readFile (fpath, { encoding: "utf8" })
-const testDataRaw = JSON.parse (file)
-
-const testData = testDataRaw .map (test => {
-    if (typeof test !== 'object') return test
-    const { input, base, href, failure } = test
-    return { input, base, href, failure }
-  }
-)
+const testData = JSON.parse (file)
 
 const testSet = new WebTests (testData, runTest)
-  .filter (input => input && typeof input === 'object')
+  .filter (test => test && typeof test === 'object')
 
-  .assert ('equal failure', (input, output, error) =>
-    !!input.failure === !!error )
+  .assert ('equal failure', (test, output, error) =>
+    !!test.failure === !!error )
 
-  .assert ('equal href', (input, output, error) =>
-    input.failure || input.href === output.href )
+  .assert ('equal scheme', (test, output, error) =>
+    !('protocol' in test) || test.protocol === output.scheme + ':')
+
+  .assert ('equal username', (test, output, error) =>
+    !('username' in test) || test.username === output.user || test.username === '' && output.user == null)
+
+  .assert ('equal password', (test, output, error) =>
+    !('password' in test) || test.password === output.pass || test.password === '' && output.pass == null)
+
+  // Can add the others; It's fine
+  // pathname, hostname
+
+  .assert ('equal query', (test, output, error) =>
+    !('search' in test) || test.search === '' && (output.query === '' || output.query == null) || test.search === '?' + output.query)
+
+  .assert ('equal fragment', (test, output, error) =>
+    !('hash' in test) || test.hash === '' && (output.hash === '' || output.hash == null) || test.hash === '#' + output.hash)
+
+  .assert ('equal href', (test, output, error) =>
+    test.failure || test.href === output.href )
 
 
 // Run Tests

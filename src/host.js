@@ -10,7 +10,7 @@ import tr46 from 'tr46'
 // - IPv4 addresses are parsed to a single integer
 // - Opaque hosts are represented as non-empty strings
 // - Note that the empty *authority* is signified by setting
-//   the *host* property to the empty string. 
+//   the *host* property to the empty string.
 
 const types = 
   { opaque:1, domain:2, ipv4:4, ipv6:6 }
@@ -28,13 +28,14 @@ const parseHost = (input, percentCoded = true) =>
   ( input === '' || typeof input !== 'string' ? input
   : parseDomain (input, percentCoded) )
 
+// The difference with the above is that the host cannot be ''
 const parseWebHost = (input, percentCoded = true) =>
   ( typeof input !== 'string' ? input
   : parseDomain (input, percentCoded) )
 
 const validateOpaqueHost = (input, percentCoded = true) => {
   if (_opaqueHostCodes.test (input)) return input
-  else throw new Error (`Invalid opaque-host-string "${input}"`)
+  else throw new Error (`The hostname in //${input} contains forbidden host codepoints`)
 }
 
 
@@ -61,13 +62,13 @@ function parseDomain (input, percentCoded = true) {
   let r = percentCoded ? pct.decode (input) : input
   const { domain, error } = tr46.toUnicode (r, toUniodeOptions)
   if (error)
-    throw new Error (`Invalid domain-string "${input}"`)
+    throw new Error (`The hostname in //${input} cannot be parsed as a domain name`)
   const address = ipv4.parse (domain)
   if (address != null) return address
   if (domain === '' || _endsInNumber.test (domain))
-    throw new Error ('Invalid doimain-string')
+    throw new Error (`The hostname in //${input} cannot be parsed as a domain name`)
   if (_isDomainString.test (domain)) return domain.split ('.')
-    throw new Error ('Invalid domain-string')
+    throw new Error (`The hostname in //${input} cannot be parsed as a domain name`)
 }
 
 

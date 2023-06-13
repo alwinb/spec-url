@@ -1,5 +1,5 @@
 import { parseAuth } from './auth.js'
-import { hostType, hostTypes, parseHost, parseWebHost, validateOpaqueHost, printHost, domainToASCII, ipv6, ipv4 } from './host.js'
+import { hostType, hostTypes, parseHost, validateOpaqueHost, printHost, domainToASCII, ipv6, ipv4 } from './host.js'
 import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
@@ -30,28 +30,43 @@ const componentTypes =
 // these are modeled as an array of numbers, an array of strings, a number,
 // or a string, respectively.
 
-// ### Modes
+// ### Options
 
-// URLs have scheme-dependent behaviour that divides them into four
-// categories, called `modes` here. The `noscheme` mode is used
-// to select behaviour that is fine-tuned for schemeless URLs.
-// In this implementation, each mode is associated with a bit-flag.
-// All modes other than the `generic` mode are said to be `special`. 
-// Thus, `special` here is not actually a mode, but a set of three modes.
+const opts = {
+  hierPart:  1 << 0, // Resolved URL must have an authority and hierarchical path
+  plainAuth: 1 << 1, // Resolved URL must not have credentials nor a port
+  stealAuth: 1 << 2, // Resolved URL must have a non-empty authority
+  parseHost: 1 << 3, // Resolved URL host must not be opaque
+  nonStrict: 1 << 4, // Rebase and Resolve use non-strict reference transformation
+  winDrive:  1 << 5, // Parse windows drive letters
+  winSlash:  1 << 6, // Parse \ before query as /
+  default:   0,
+}
 
-const modes =
-  { generic:1, noscheme:2, web:4, file:8, special:0b1110 }
+// ### Configurations
 
-const specialSchemes =
-  { http:4, https:4, ws:4, wss:4, ftp:4, file:8 }
+const modes = {
+  file:     opts.hierPart | opts.winSlash | opts.nonStrict | opts.parseHost | opts.plainAuth | opts.winDrive,
+  web:      opts.hierPart | opts.winSlash | opts.nonStrict | opts.parseHost | opts.stealAuth,
+  noscheme: opts.hierPart | opts.winSlash | opts.winDrive,
+  generic:  opts.default,
+}
 
-// The `modeFor` function returns the mode for a given URL object
-// based on its scheme. The mode to be used for schemeless URLs can
-// be manually overridden by specifying a fallback mode. It defaults
-// to the `noscheme` mode.
+const specialSchemes = {
+  http:  modes.web,
+  https: modes.web,
+  ws:    modes.web,
+  wss:   modes.web,
+  ftp:   modes.web,
+  file:  modes.file,
+}
+
+// The `modeFor` function returns a configuration of options for a given
+// URL object based on its scheme. The configuration to be used for
+// schemeless URLs can be manually overridden by specifying a fallback mode.
 
 const modeFor = (url, fallback = modes.noscheme) =>
-  ( url.scheme ? specialSchemes [low (url.scheme)] || modes.generic
+  ( url.scheme ? specialSchemes [low (url.scheme)] ?? modes.generic
   : url.drive ? modes.file
   : fallback )
 
@@ -64,30 +79,6 @@ const low = str =>
   str ? str.toLowerCase () : str
 
 
-// ### Authority - Structural invariants
-
-// NB I do allow web-URLs to have an empty host.
-// Instead, force will ensure that their host is not empty.
-
-const authErrors = (auth, mode = modes.generic) => {
-  const errs = []
-  const hasNoHost = auth.host == null || auth.host === ''
-
-  if (auth.port != null)
-    if (mode & modes.file) errs.push (`A file-URL cannot have a port`)
-    else if (hasNoHost) errs.push (`A URL without a host cannot have a port`)
-
-  if (auth.user != null || auth.pass != null)
-    if (mode & modes.file) errs.push (`A file-URL cannot have credentials`)
-    else if (hasNoHost) errs.push (`A URL without a host cannot have credentials`)
-
-  if (auth.pass != null && auth.user == null)
-    errs.push (`A URL without a username cannot have a password`)
-  
-  return errs.length ? errs : null
-}
-
-
 // Order and Upto
 // --------------
 
@@ -96,9 +87,20 @@ const authErrors = (auth, mode = modes.generic) => {
 
 // The `ord` function returns the order of an URL.
 
+const ords = componentTypes
+
 const attributeNames = {
-  scheme:1, user:2, pass:2, host:2, port:2, drive:3,
-  root:4, dirs:5, file:6, query:7, hash:8
+  scheme: ords.scheme,
+  user:   ords.auth,
+  pass:   ords.auth,
+  host:   ords.auth,
+  port:   ords.auth,
+  drive:  ords.drive,
+  root:   ords.root,
+  dirs:   ords.dir,
+  file:   ords.file,
+  query:  ords.query,
+  hash:   ords.hash
 }
 
 const ord = url => {
@@ -122,6 +124,7 @@ const upto = (url, ord) => {
   return r
 }
 
+
 // Rebase
 // ------
 // The `rebase` function is the heart of the reference-resolution
@@ -143,10 +146,10 @@ const pureRebase = (url, base) => {
   return r
 }
 
-// The `WHATWGRebase` function is a generalisation of the URL
-// resolution behaviour that is implicitly specified by the WHATWG.
-// It makes the same distinctions between file-, web- and opaque-path
-// URLs as the WHATWG standard does, but it also supports schemeless URLs.
+// The `rebase` function is a generalisation of the URL resolution behaviour
+// that is implicitly specified by the WHATWG. It makes the same distinctions
+// between file-, web- and opaque-path URLs as the WHATWG standard does, but
+// also supports schemeless URLs.
 
 // It uses what RFC3986 calls the 'non-strict' transformation of
 // references (section 5.2) for 'special' URLs: If the input has a scheme
@@ -154,78 +157,98 @@ const pureRebase = (url, base) => {
 // removed. It then continues with the 'strict' behaviour as implemented
 // by the `pureRebase` function.
 
-class RebaseError extends TypeError {
+function rebase (url, base = {}) {
+
+  if (typeof base === 'string')
+    base = parse (base)
+
+  if (typeof url === 'string')
+    url = parse (url, modeFor (base))
+
+  if (url.scheme && modeFor (url) & opts.nonStrict && low (url.scheme) === low (base.scheme))
+    url = setProto ({ scheme:null }, url)
+
+  // log (modeFor(base) & opts.hierPart.toString (2))
+  if (url.scheme || isFragment (url) || !hasOpaquePath (base))
+    return pureRebase (url, base)
+
+  else
+    throw new RebaseError (url, base)
+}
+
+function goto (base, url) {
+  return rebase (url, base)
+}
+
+class RebaseError extends Error {
   constructor (url1, url2) {
     super (`Cannot rebase <${print(url1)}> onto <${print(url2)}>`)
   }
 }
 
-const WHATWGRebase = (url, base) => {
-  if (url.scheme && modeFor (url) & modes.special && low (url.scheme) === low (base.scheme))
-    url = setProto ({ scheme:null }, url)
-  if (url.scheme || isFragment (url) || !hasOpaquePath (base))
-    return pureRebase (url, base)
-  else throw new RebaseError (url, base)
-}
 
-// Note: opaque-paths are currently not modeled, nor implemented
-// by using a separate *opaque-path* component-type. Instead they are
+// Note: opaque-paths are currently not modeled by using a 
+// separate *opaque-path* component-type. Instead they are
 // detected by looking at the shape of the URL as follows.
 
 const hasOpaquePath = url =>
-  url.root == null && url.host == null && modeFor (url) === modes.generic
+  !(modeFor (url) & opts.hierPart) && url.root == null && url.host == null
 
 
-// Forcing
-// -------
 
-// The WHATWG standard specifies URL resolution behaviour that deviates
-// from RFC3986. This behaviour is implemented via an additional `force`
-// operation.
+// Reference Resolution
+// --------------------
 
-class ForceError extends TypeError {
-  constructor (url) {
-    super (`Cannot coerce <${print(url)}> to an absolute URL`)
-    this.url = url
-  }
-}
+function resolve (input, base = {}) {
 
-const forceAsFileUrl = url => {
-  try {
-    const { user, pass, port } = url
-    if (user != null || pass != null || port != null) throw url
-    const r = assign ({ }, url)
-    r.host = url.host == null ? '' : parseHost (url.host)
-    if (r.drive == null) r.root = '/'
-    return r
-  }
-  catch (e) { throw new ForceError (url) }
-}
+  const result =
+    rebase (input, base)
 
-const forceAsWebUrl = url => {
-  try {
-    const r = assign ({ }, url)
-    if (url.host == null || url.host === '') {
-      const match = _firstNonEmptySegment (url)
-      assign (r, parseAuth (match.value))
-      _removeSegments (r, match)
+  if (result.scheme == null)
+    throw new ResolveError (input, base)
+
+  const mode =
+    modeFor (result)
+
+  if (mode & opts.stealAuth) {
+    if (result.host == null || result.host === '') {
+      const match = _firstNonEmptySegment (result)
+      if (!match) throw new ResolveError (result)
+      _removePrecedingSegments (result, match)
+      assign (result, parseAuth (match.value))
     }
-    r.host = parseWebHost (r.host)
-    r.root = '/'
-    return r
   }
-  catch (e) { throw new ForceError (url) }
+
+  if (mode & opts.plainAuth) {
+    const { user, pass, port } = result
+    if (user != null || pass != null || port != null)
+      throw new Error (`Cannot resolve <${print(result)}>\n\t -A file URL must not have a username, password, or port\n`)
+  }
+
+  if (mode & opts.hierPart) { 
+    if (result.host == null) result.host = ''
+    if (result.drive == null) result.root = '/'
+  }
+
+  if (mode & (opts.parseHost))
+    result.host = parseHost (result.host)
+
+  return percentEncodeMut (normaliseMut (result), 'WHATWG')
 }
 
-const force = url => {
-  const mode = modeFor (url)
-  if (mode === modes.file) return forceAsFileUrl (url)
-  else if (mode === modes.web) return forceAsWebUrl (url)
-  else if (url.scheme) return url
-  else throw new ForceError (url)
+
+class ResolveError extends TypeError {
+  constructor (url1, url2) {
+    if (url2 != null)
+      super (`Cannot resolve <${print(url1)}> against <${print(url2)}>`)
+    else
+      super (`Cannot resolve <${print(url1)}>`)
+  }
 }
 
-// Utils
+
+// Forced resolve makes use of the following
+// helper functions:
 
 const _firstNonEmptySegment = url => {
   const dirs = url.dirs || []
@@ -233,10 +256,10 @@ const _firstNonEmptySegment = url => {
     return { value:dirs[i], ord:componentTypes.dir, index:i }
   if (url.file)
     return { value:url.file, ord:componentTypes.file }
-  throw null // not found
+  return null
 }
 
-const _removeSegments = (url, match) => {
+const _removePrecedingSegments = (url, match) => {
   if (match.ord === componentTypes.dir) {
     const dirs_ = url.dirs.slice (match.index + 1)
     if (dirs_.length) url.dirs = dirs_
@@ -248,19 +271,33 @@ const _removeSegments = (url, match) => {
 }
 
 
-// Reference Resolution
-// --------------------
+function* iterate (url) {
+  if (typeof url === 'string')
+    url = parse (url)
 
-class ResolveError extends TypeError {
-  constructor (url1, url2) {
-    super (`Cannot resolve <${print(url1)}> against <${print(url2)}>`)
+  if (url.scheme)
+    yield ['scheme', url.scheme]
+
+  if (url.host != null)  {
+    const { user = null, pass = null, host, port = null } = url
+    yield ['auth', { user, pass, host, port } ]
   }
+
+  if (url.root)
+    yield ['root', url.root]
+
+  if (url.dirs) for (const dir of url.dirs)
+    yield ['dir', dir]
+
+  if (url.file)
+    yield ['file',  url.file]
+
+  if (url.query)
+    yield ['query', url.query]
+
+  if (url.hash)
+    yield ['hash',  url.hash]
 }
-
-const WHATWGResolve = (url, base) =>
-  base == null ? force (url)
-  : force (WHATWGRebase (url, base))
-
 
 
 // Normalisation
@@ -269,10 +306,11 @@ const WHATWGResolve = (url, base) =>
 const defaultPorts =
   { http: 80, ws: 80, https: 443, wss: 443, ftp: 21 }
 
+const normalise = (url, coded = true) =>
+  normaliseMut (assign ({}, url), coded)
 
-const normalise = (url, coded = true) => {
 
-  const r = assign ({}, url)
+function normaliseMut (r, coded = true) {
 
   // ### Scheme normalisation
 
@@ -291,22 +329,22 @@ const normalise = (url, coded = true) => {
 
   // ### Path segement normalisation
 
-  if (hasOpaquePath (url) && url.dirs)
+  if (hasOpaquePath (r) && r.dirs)
     r.dirs = r.dirs.slice ()
 
   else {
     const dirs = []
-    for (const x of r.dirs||[]) {
+    for (const x of r.dirs ?? []) {
       const isDots = dots (x, coded)
       // TODO redo this, neatly
       if (isDots === 0) dirs.push (x)
       else if (isDots === 2) {
         if (dirs.length && dirs[dirs.length-1] !== '..') dirs.pop ()
-        else if (!url.root) dirs.push ('..')
+        else if (!r.root) dirs.push ('..')
       } 
     }
     if (dirs.length) r.dirs = dirs
-    else if (ord (url) === componentTypes.dir) r.dirs = ['.']
+    else if (ord (r) === componentTypes.dir) r.dirs = ['.']
     else delete r.dirs
   }
 
@@ -315,7 +353,7 @@ const normalise = (url, coded = true) => {
   if (scheme === 'file' && isLocalHost (r.host))
     r.host = ''
 
-  else if (url.port === defaultPorts [scheme])
+  else if (r.port === defaultPorts [scheme])
     delete r.port
 
   for (const k in attributeNames)
@@ -326,14 +364,13 @@ const normalise = (url, coded = true) => {
 // where
 
 const dots = (seg, coded = true) =>
-  seg.length <= 3
-    && (seg === '.'
-    || coded && low (seg) === '%2e') ? 1 :
-  seg.length <= 6
-    && (seg === '..'
-    || coded && low (seg) === '.%2e'
-    || coded && low (seg) === '%2e.'
-    || coded && low (seg) === '%2e%2e') ? 2 : 0
+  seg === '.' ? 1 :
+  seg === '..' ? 2 :
+  coded && seg.length === 3 && low (seg) === '%2e' ? 1 :
+  coded && seg.length <= 6
+    && (low (seg) === '.%2e'
+    || low (seg) === '%2e.'
+    || low (seg) === '%2e%2e') ? 2 : 0
 
 
 const isLocalHost = host =>
@@ -346,9 +383,12 @@ const isLocalHost = host =>
 // -------------------
 // NB uses punycoding rather than percent coding on domains
 
-const percentEncode = (url, spec = 'WHATWG') => {
-  const r = { }
-  const mode = modeFor (url)
+const percentEncode = (url, spec = 'WHATWG') =>
+  percentEncodeMut (assign ({}, url), spec)
+
+
+function percentEncodeMut (r, spec = 'WHATWG') {
+  const config = modeFor (r)
 
   // TODO strictly speaking, IRI must encode more than URL
   // -- and in addition, URI and IRI should decode unreserved characters
@@ -356,53 +396,41 @@ const percentEncode = (url, spec = 'WHATWG') => {
 
   const unicode = spec in { minimal:1, URL:1, IRI:1 }
   const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
-  const profile = (mode & modes.special) 
+  const profile = (config & opts.winSlash) 
     ? specialProfiles [spec] || specialProfiles.default
     : profiles [spec] || profiles.default
 
-  if (url.scheme != null)
-    r.scheme = url.scheme
+  if (r.user != null)
+    r.user = encode (r.user, profile.user)
 
-  if (url.user != null)
-    r.user = encode (url.user, profile.user)
+  if (r.pass != null)
+    r.pass = encode (r.pass, profile.pass)
 
-  if (url.pass != null)
-    r.pass = encode (url.pass, profile.pass)
-
-  if (url.host != null) {
-    const t = hostType (url.host)    
+  if (r.host != null) {
+    const t = hostType (r.host)    
     r.host
-      = t === hostTypes.ipv6 ? [...url.host]
-      : t === hostTypes.ipv4 ? url.host
-      : t === hostTypes.domain ? (unicode ? [...url.host] : domainToASCII (url.host))
-      : t === hostTypes.opaque ? encode (url.host, profile.host)
-      : url.host
+      = t === hostTypes.ipv6 ? [...r.host]
+      : t === hostTypes.ipv4 ? r.host
+      : t === hostTypes.domain ? (unicode ? [...r.host] : domainToASCII (r.host))
+      : t === hostTypes.opaque ? encode (r.host, profile.host)
+      : r.host
   }
 
-  if (url.port != null)
-    r.port = url.port
-
-  if (url.drive != null)
-    r.drive = url.drive
-
-  if (url.root)
-    r.root = '/'
-
   // ... opaque paths
-  const seg_esc = hasOpaquePath (url)
+  const seg_esc = hasOpaquePath (r)
     ? profiles.minimal.dir | sets.c0c1 : profile.dir
 
-  if (url.dirs)
-    r.dirs = url.dirs.map (x => encode (x, seg_esc))
+  if (r.dirs)
+    r.dirs = r.dirs.map (x => encode (x, seg_esc))
 
-  if (url.file != null)
-    r.file = encode (url.file, seg_esc)
+  if (r.file != null)
+    r.file = encode (r.file, seg_esc)
 
-  if (url.query != null)
-    r.query = encode (url.query, profile.query)
+  if (r.query != null)
+    r.query = encode (r.query, profile.query)
 
-  if (url.hash != null)
-    r.hash = encode (url.hash, profile.hash)
+  if (r.hash != null)
+    r.hash = encode (r.hash, profile.hash)
 
   return r
 }
@@ -430,7 +458,7 @@ const isSchemeLike =
   /^([a-zA-Z][a-zA-Z+\-.]*):(.*)$/
 
 const isDriveLike = 
-  /^([a-zA-Z])(:||)$/
+  /^[a-zA-Z][:|]$/
 
 const print = (url, spec = 'minimal') => {
   url = percentEncode (url, spec)
@@ -494,192 +522,283 @@ const unsafePrint = url => {
 // URL Parsing
 // -----------
 
-// Parser states
-// Using bitflags, but also order
+// ### Character Classes
 
-function* flags (a = 0, z = 30) {
-  while (a <= z) yield 1<<a++ }
+// const CharClass = {
+//   Other: 0,
+//   Alpha: 1,
+//   SchemeOther: 2,
+//   Digit: 3,
+//   Colon: 4,
+//   Slash: 5,
+//   QuestionMark: 6,
+//   Hash: 7,
+// }
 
-const [ START, SCHEME, SS, AUTH, PATH, QUERY, FRAG ]
-  = flags ()
+const eqClasses = new Uint8Array ([
+//NUL SOH STX ETX EOT ENQ ACK BEL BS  HT  LF  VT  FF  CR  SO  SI
+   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+//DLE DC1 DC2 DC3 DC4 NAK SYN ETB CAN EM  SUB ESC FS  GS  RS  US
+   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+// SP  !   "   #   $   %   &   '   (   )   *   +   ,   -   .   /                    
+   0,  0,  0,  7,  0,  0,  0,  0,  0,  0,  0,  2,  0,  2,  2,  5,
+// 0   1   2   2   4   5   6   7   8   9   :   ;   <   =   >   ?
+   3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  4,  0,  0,  0,  0,  6,
+// @   A   B   C   D   E   F   G   H   I   J   K   L   M   N   O
+   0,  1,  1,  1,  1,  1,  1,  1,  1 , 1,  1,  1,  1,  1,  1,  1,
+// P   Q   R   S   T   U   V   W   X   Y   Z   [   \   ]   ^   _
+   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  5,  0,  0,  0, 
+// '   a   b   c   d   e   f   g   h   i   j   k   l   m   n   o
+   0,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1, 
+// p   q   r   s   t   u   v   w   x   y   z   {   |   }   ~  DEL
+   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0,  0,  0, 0 ])
 
-const [ CR, LF, TAB, SP, QUE, HASH, COL, PLUS, MIN, DOT, SL, SL2, BAR ] =
-  [...'\r\n\t ?#:+-./\\|'] .map (_ => _.charCodeAt (0))
+const cc_other = 0
+const cc_count = 8
 
-const isAlpha = c =>
-  0x41 <= c && c <= 0x5A || 0x61 <= c && c <= 0x7A
+// Alternative lookup table for parsePath; where ? and # are 
+// not considered to be delimiters:
 
-// ### URL Parsing
+const pathEqClasses = new Uint8Array(eqClasses)
+pathEqClasses['?'.charCodeAt(0)] = cc_other
+pathEqClasses['#'.charCodeAt(0)] = cc_other
 
-function parse (input, mode = modes.noscheme) {
-  const url   = { }
-  let state   = START|SCHEME
-  let slashes = 0, letter = false, isDrive = false
-  let buffer  = '', end = 0
+// Non-special URLs do not handle \ as /
+const nonSpecialEqClasses = new Uint8Array(eqClasses)
+nonSpecialEqClasses['\\'.charCodeAt(0)] = cc_other
 
-  for (let i=0, l=input.length; i<=l; i++) { // includes NaN as an EOF code
-    const c = input.charCodeAt (i)
+const nonSpecialPathEqClasses = new Uint8Array(pathEqClasses)
+nonSpecialEqClasses['\\'.charCodeAt(0)] = cc_other
 
-    // Skip tabs, newlines, leading control-space and strip trailing control-space
-    if (c === CR || c === LF || c === TAB || state & START && c <= SP) continue
-    if (isNaN (c)) buffer = buffer.substr (0, end)
 
-    // Handle the delimiters: (:), (/), (\), (?) and (#)
+// ### States and Tokens
 
-    const isSlash =
-      c === SL || (mode & modes.special) && c === SL2
+const State = {
+  Fail: 0,
+  Start: 1,
+  AfterScheme: 2,
+  AfterSpecialScheme: 3,
+  AfterAuth: 4,
+  RelativePath: 5,
+  AfterFile: 6,
+  Scheme: 7,
+  Auth: 8,
+  Root: 9,
+  Dir: 10,
+  File: 11,
+  Query: 12,
+  Hash: 13,
+  RootNoAuth: 14,
+  FileSchemeLike: 15,
+  OpaquePath: 16,
+}
 
-    if (isSlash && state & (START|SS)) {
-      state = (++slashes === 2) ? AUTH : SS
-      continue
+// A state is accepting if state >= min_accepts
+const min_accepts = State.Scheme
+
+// Create an inverse lookup table to convert
+// states to their human readable name
+const stateNames = []
+for (const k in State)
+  stateNames[State[k]] = k
+
+// Abbreviate states
+const T = State
+const __ = State.Fail
+
+// Transition table / DFA
+
+const dfa = new Uint8Array ([
+//oth alp +-. dig  :   /   ?   #  
+  __, __, __, __, __, __, __, __, // 0: Fail
+  11, 15, 11, 11, 11, 14, 12, 13, // 1: Start
+  16, 16, 16, 16, 16, 14, 12, 13, // 2: AfterScheme
+  11, 11, 11, 11, 11, 14, 12, 13, // 3: AfterSpecialScheme
+  11, 11, 11, 11, 11,  9, 12, 13, // 4: AfterAuth
+  11, 11, 11, 11, 11, 10, 12, 13, // 5: RelativePath
+  __, __, __, __, __, __, 12, 13, // 6: AfterFile
+  __, __, __, __, __, __, __, __, // 7: Scheme
+   8,  8,  8,  8,  8, __, __, __, // 8: Auth
+  __, __, __, __, __, __, __, __, // 9: Root
+  __, __, __, __, __, __, __, __, // 10: Dir
+  11, 11, 11, 11, 11, 10, __, __, // 11: File
+  12, 12, 12, 12, 12, 12, 12, __, // 12: Query
+  13, 13, 13, 13, 13, 13, 13, 13, // 13: Hash // NB does not verify presence of #
+  __, __, __, __, __,  8, __, __, // 14: RootNoAuth
+  11, 15, 15, 15,  7, 10, __, __, // 15: FileSchemeLike
+  16, 16, 16, 16, 16, 16, __, __, // 16: OpaquePath
+])
+
+
+// Parser
+// ------
+
+function parse (input, conf = modes.noscheme) {
+  const cctable = conf & opts.winSlash ? eqClasses : nonSpecialEqClasses
+  return _parse (input, T.Start, cctable, conf)
+}
+
+function parsePath (input, conf = modes.noscheme) {
+  const cctable = conf & opts.winSlash ? pathEqClasses : nonSpecialPathEqClasses
+  return _parse (input, T.AfterAuth, cctable, conf)
+}
+
+function _preprocess (input) {
+  // preprocess: remove leading and trailing C0-space
+  let anchor = 0, end = input.length
+  while (anchor < end && input.charCodeAt(anchor) <= 0x20) anchor++
+  while (end > anchor && input.charCodeAt(end-1) <= 0x20) end--
+  // Ehm optimise this; how slow is curring strings even,
+  // compared to going the buffer way
+  return input.substring (anchor, end) .replace (/[\x09\x0a\x0d]+/g, '')
+}
+
+function isDriveString (input) {
+  return input.length === 2 &&
+    (input[1] === ':' || input[1] === '|') &&
+    eqClasses[input.charCodeAt(0)] === 1
+}
+
+function _parse (input, _entry = T.Start, cctable = eqClasses, conf = modes.noscheme) {
+  input = _preprocess (input) // REVIEW should this be done higher up?
+  let entry = _entry, anchor = 0
+  let match = T.Fail, end = 0
+  const length = input.length
+
+  const url = { }
+  outer: while (end < length) {
+
+    inner: for (let state = entry, pos = anchor = end; state && pos < length;) {
+      const c = input[pos++] .charCodeAt (0)
+      const cc = c <= 127 ? cctable [c] : cc_other
+      state = dfa [state * cc_count + cc]
+      if (state >= min_accepts) (match = state, end = pos)
     }
 
-    const isDelim
-      =  state === SCHEME && c === COL
-      || state < QUERY && (isSlash || c === QUE)
-      || state < FRAG  && c === HASH
-      || isNaN (c) 
-
-    if (isDelim) {
-
-      if (state === SCHEME && c === COL) {
-        url.scheme = buffer
-        mode = modeFor (url)
-      }
-        
-      else if (state === SS) {
-        if (isSlash || slashes) url.root = '/'
-      }
-
-      else if (isDrive) {
-        if (state & AUTH) url.host = ''
-        url.drive = buffer
-        delete url.root // keep the properties ordered
-        if (isSlash) url.root = '/'
-      }
-
-      else if (state & AUTH) {
-        assign (url, parseAuth (buffer))
-
-        url.host = validateOpaqueHost (url.host)
-        // url.host = mode & (modes.web | modes.file)
-        //   ? parseHost (url.host) // NB empty hosts are allowed
-        //   : validateOpaqueHost (url.host)
-
-        if (isSlash) url.root = '/'
-        const errs = authErrors (url /*, mode - disabled, use default */)
-        if (errs) {
-          const message = '\n\t- ' + errs.join ('\n\t- ') + '\n'
-          throw new Error (`Invalid URL-string <${input}> ${message}`)
+    switch (match) {
+      case T.Scheme:
+        url.scheme = input.substring (anchor, end-1)
+        conf = modeFor (url)
+        if (conf & opts.winSlash) {
+          cctable = eqClasses
+          entry = T.AfterSpecialScheme
         }
+        else {
+          cctable = nonSpecialEqClasses
+          entry = T.AfterSpecialScheme // T.AfterScheme Disable OpaquePath parsing for the moment
+        }
+        continue outer
+
+      case T.OpaquePath:
+        url.file = input.substring (anchor, end) // REVIEW!!
+        // url.opaquePath = input.substring (anchor, end)
+        entry = T.AfterFile
+        continue outer;
+
+      case T.Auth: {
+        const value = input.substring (anchor+2, end)
+        if (conf & opts.winDrive && isDriveString (value)) {
+          url.host = ''
+          url.drive = value
+          continue outer
+        }
+        const auth = parseAuth (value)
+        validateOpaqueHost (auth.host)
+        assign (url, auth)
+        entry = T.AfterAuth
+        continue outer
       }
 
-      else if (state === QUERY)
-        url.query = buffer
+      case T.Root:
+      case T.RootNoAuth:
+        url.root = '/' // input[anchor]
+        entry = T.RelativePath
+        continue outer
 
-      else if (state === FRAG)
-        url.hash = buffer
+      case T.Dir: {
+        const value = input.substring (anchor, end-1)
+        url.dirs = url.dirs ?? []
+        url.dirs.push (value)
+        entry = T.RelativePath
+        continue outer
+      }
 
-      else if (isSlash)
-        (url.dirs = url.dirs || []) .push (buffer)
+      case T.File:
+      case T.FileSchemeLike: {
+        const value = input.substring (anchor, end)
+        if (dots (value)) {
+          url.dirs = url.dirs ?? []
+          url.dirs.push (value)
+          entry = T.AfterFile
+        }
+        else {
+          url.file = value
+          entry = T.AfterFile
+        }
+        continue outer
+      }
 
-      else if (buffer)
-        url.file = buffer
+      case T.Query:
+        url.query = input.substring (anchor+1, end)
+        entry = T.Hash
+        continue outer
 
-      state
-        = c === COL ? SS
-        : c === QUE ? QUERY
-        : c === HASH ? FRAG : PATH
-
-      letter = isDrive = false;
-      [buffer, end] = ['', 0]
-      continue
+      case T.Hash:
+        url.hash = input.substring (anchor+1, end)
+        break outer
     }
-
-    // Buffer characters otherwise;
-    // Maintain state for scheme, path-root and drive
-
-    if (state & SCHEME && isAlpha (c))
-      state = SCHEME
-
-    else if (state === SCHEME && (c !== PLUS && c !== MIN && c !== DOT) && (c < 0x30 || 0x39 < c))
-      state = PATH
-
-    else if (state & (START|SS)) {
-      if (slashes) url.root = '/'
-      state = PATH
-    }
-
-    if (mode & (modes.file | modes.noscheme) && !url.drive && !url.dirs && state < QUERY) {
-      isDrive = letter && (c === BAR || state &~ SCHEME && c === COL)
-      letter = !buffer && isAlpha (c)
-    }
-    else isDrive = false
-
-    buffer += input[i]
-    if (c > SP) end = buffer.length
-  }
-
-  // Disallow dotted file segments:
-  // Convert `..` to `../` and `.` to `./`
-
-  const fileDots = url.file && dots (url.file)
-  if (!hasOpaquePath (url) && fileDots) {
-    if (url.dirs) url.dirs.push (url.file)
-    else url.dirs = [url.file]
-    delete url.file
   }
   
-  // REVIEW - If the URL starts with a drive-letter
-  // then explicitly set the scheme to be 'file'.
+  // Drive letter detection
+  if (url.drive == null && conf & opts.winDrive) {
+    const match = _firstNonEmptySegment (url)
+    if (match && isDriveString (match.value)) {
+      _removePrecedingSegments (url, match)
+      url.drive = match.value
+      if (match.ord === componentTypes.file)
+        delete url.root
+      else url.root = '/'
+    }
+  }
 
-  if (url.drive && url.scheme == null)
-    url.scheme = 'file'
   return url
 }
-
-
-
-// WHATWG Parse Resolve and Normalise
-// ----------------------------------
-
-const parseRebase = (input, base) => {
-  if (base == null) return parse (input)
-  if (typeof base === 'string') base = parse (base)
-  const url = parse (input, modeFor (base))
-  return WHATWGRebase (url, base)
-}
-
-const WHATWGParseResolve = (input, base) => {
-  const resolved = force (parseRebase (input, base))
-  return percentEncode (normalise (resolved), 'WHATWG')
-}
-
 
 
 // Exports
 // =======
 
-const version = '2.3.3-dev'
+const version = '2.4.0-dev'
 const unstable = { utf8, pct, PercentEncoder }
 
 export {
   version,
-  
-  modes, modeFor, 
-  componentTypes, ord, upto, pureRebase, WHATWGRebase,
-  forceAsFileUrl, forceAsWebUrl, force, 
-  hasOpaquePath, WHATWGResolve, WHATWGResolve as resolve,
 
+  iterate,
+  opts, modes, modeFor,
+  componentTypes, componentTypes as ords,
+  ord, upto, pureRebase,
+  hasOpaquePath,
+
+  rebase, rebase as parseRebase, goto,
+  resolve, resolve as parseResolve, resolve as WHATWGResolve,
   normalise, normalise as normalize,
-  percentEncode, percentDecode,
+  percentEncode,
+  percentDecode,
 
-  parse, parseAuth, parseHost, parseWebHost, validateOpaqueHost,
-  parseRebase,
-  WHATWGParseResolve, WHATWGParseResolve as parseResolve,
+  parse,
+  parsePath,
+  parseAuth,
+  parseHost,
+  validateOpaqueHost,
 
-  ipv4, ipv6,
-  unsafePrint, print, printHost,
-  pathname, filePath,
+  print,
+  printHost,
+  pathname,
+  filePath,
+  unsafePrint,
+
+  ipv4,
+  ipv6,
   unstable
 }

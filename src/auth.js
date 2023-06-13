@@ -62,11 +62,45 @@ function parseAuth (input) {
     ? ipv6.parse (str (c + 2, p - 1)) // ipv6 address
     : str (c + 1, p) // opaque host
 
-  if (p < len) // has port
-    auth.port = parsePort (str (p + 1))
+  if (p < len) { // has port
+    try {
+      auth.port = parsePort (str (p + 1))
+    }
+    catch (e) {
+      throw new Error (`Invalid port string in authority //${input}`)
+    }
+  }
+
+  // Check structural invariants
+  const errs = authErrors (auth)
+  if (errs) {
+    const message = '\n\t- ' + errs.join ('\n\t- ') + '\n'
+    throw new Error (`Invalid authority //${input} ${message}`)
+  }
 
   return auth
 }
+
+
+// ### Authority - Structural invariants
+
+const authErrors = (auth) => {
+  const errs = []
+  const noHost = auth.host == null || auth.host === ''
+
+  if (noHost && auth.port != null)
+    errs.push (`An authority with an empty hostname cannot have a port`)
+
+  if (noHost && (auth.user != null || auth.pass != null))
+    errs.push (`An authority with an empty hostname cannot have credentials`)
+
+  if (auth.pass != null && auth.user == null)
+    errs.push (`An authority without a username cannot have a password`)
+
+  return errs.length ? errs : null
+}
+
+
 
 // ### Port
 

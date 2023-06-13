@@ -8,7 +8,17 @@ const log = console.log.bind (console)
 // ---------------------------
 
 function runTest (test) {
-  let rebased = url.parseRebase (test.input, test.base)
+
+  // I've adapted the parser to explicitly set a file scheme
+  // if a drive letter is present
+
+  const base = url.parse (test.base ?? '')
+  if (base.drive && !base.scheme) base.scheme = 'file'
+
+  const input = url.parse (test.input, url.modeFor(base))
+  if (input.drive && !input.scheme) input.scheme = 'file'
+  
+  let rebased = url.rebase (input, base)
   rebased = url.percentEncode (url.normalise (rebased))
   rebased.href = url.print (rebased)
   return rebased
