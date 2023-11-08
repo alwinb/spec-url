@@ -1,11 +1,11 @@
 {
   "name": "spec-url",
-  "version": "2.3.3-dev",
+  "version": "2.4.0-dev",
   "description": "URL library that implements a reference resolution algorithm for WHATWG URLs",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "make test"
   },
   "homepage": "https://github.com/alwinb/spec-url#readme",
   "repository": {
@@ -20,7 +20,12 @@
     "relative",
     "normalization",
     "reference resolution",
-    "resolution"
+    "resolution",
+    "RFC3986",
+    "RFC3987",
+    "IETF",
+    "URI",
+    "IRI"
   ],
   "author": "Alwin Blok",
   "license": "MIT",

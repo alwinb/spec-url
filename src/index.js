@@ -233,7 +233,7 @@ function resolve (input, base = {}) {
   if (mode & (opts.parseHost))
     result.host = parseHost (result.host)
 
-  return percentEncodeMut (normaliseMut (result), 'WHATWG')
+  return percentEncodeMut (normaliseMut (result), 'URL')
 }
 
 
@@ -390,6 +390,7 @@ const percentEncode = (url, spec = 'WHATWG') =>
 function percentEncodeMut (r, spec = 'WHATWG') {
   const config = modeFor (r)
 
+  // I am planning to clean this up soon
   // TODO strictly speaking, IRI must encode more than URL
   // -- and in addition, URI and IRI should decode unreserved characters
   // -- and should not contain invalid percent encode sequences
