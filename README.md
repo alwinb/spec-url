@@ -10,7 +10,6 @@ An URL manipulation library that supports URL records, relative URLs, reference 
 
 This library serves as a reference implementation for this [URL Specification], which is an alternative URL specification that rephrases and generalises the WHATWG URL Standard to add support for relative URLs, reference resolution and a number of other elementary operations, as wel as restoring a formal grammar. 
 
-**Please consider using the latest version**, even if released under a -dev prerelease flag. The API is stabilising, but I am still making small changes. 
 Always feel free to ask questions. If you wish, you may file an issue for a question.
 
 People are encouraged to experiment with creating more high level APIs around this library. One example is my [reurl] library, which wraps around spec-url to provide a high level API for immutable URL objects. 
@@ -52,32 +51,28 @@ There is a one-to-one correspondence between this representation and sequences o
 
 [URL Model]: https://alwinb.github.io/url-specification/#url-model
 
-### Rebase
+### Bsics
 
-The _rebase_ function is the preferred method for composing URLs. It can be thought of as a _resolve_ function that adds support for relative URLs.
-
-* ords — { scheme, auth, drive, root, dir, file, query, hash }
+* componentTypes — { scheme, auth, drive, root, dir, file, query, hash } — aka. ords
 * ord (url)
 * upto (url, ord)
-* rebase (url1, url2) — aka. goto (url2, url1)
 
+### Rebase and Resolve
 
-### Forcing
+The _rebase_ function is the preferred method for composing URLs. It can be thought of as a _resolve_ function for relative URLs.
+The rebase function does not attempt to parse opaque hosts as a domain, and does not enforce additional requirements on the authority.
 
-Forcing is used to coerce an URL to an absolute URL. Absolute URLs always have a scheme, but absolute file- and web-URLs have additional, more specific features. The force operation tries to meet those requirements, or throws an error otherwise.
-
-* forceAsFileUrl (url)
-* forceAsWebUrl (url)
-* force (url)
-
-### Resolve
+* rebase (url-or-string, base-url-or-string)
+  - aka. goto (base-url-or-string, url-or-string) — (flipped arguments, deprecated)
+  - aka. parseRebase (url-or-string, base-url-or-string)
 
 The _resolve_ function is similar to _rebase_ but it always produces an absolute URL, or throws an error if it is unable to do so.
+It coerces special URLs to have an authority, and parses their hosts as a domain. It enforces that file URLs do not have a user, pass nor port. 
+NB this converts the first non-empty path segment of a web-URL to an authority if this is needed.
 
-* hasOpaquePath (url)
-* genericResolve (url1, url2) — RFC 3986 _strict_ resolution.
-* legacyResolve (url1, url2) — RFC 3986 _non-strict_ resolution.
-* resolve (url1 [, url2]) — aka. WHATWGResolve
+* resolve (url-or-string [, base-url-or-string])
+  - aka. parseResolve
+  - aka. WHATWGResolve
 
 ### Normalisation
 
@@ -90,11 +85,12 @@ The _resolve_ function is similar to _rebase_ but it always produces an absolute
 * modes — { generic, web, file, noscheme }
 * modeFor (url, fallback)
 * parse (string [, mode])
+* parsePath (string [, mode])
 * parseAuth (string)
 * parseHost (string-or-host)
-* parseWebHost (string-or-host)
 * validateOpaqueHost (string)
 * parseRebase (string [, base-url-or-string])
+* parseResolve (string [, base-url-or-string])
 
 ### Printing
 
@@ -115,10 +111,6 @@ The _resolve_ function is similar to _rebase_ but it always produces an absolute
   * print (num-array)
   * normalise (string)
 
-### Parse Resolve and Normalise
-
-* parseResolve (string [, base-url-or-string]) — aka. WHATWGParseResolve
-
 
 Changelog
 ---------
@@ -126,6 +118,13 @@ Changelog
 ### Forthcoming
 
 Work has started on a simple API wrapper.
+
+### Version 2.4.0-dev
+
+- Exports a parsePath (input [, mode]) function.
+- Includes proper IDNA domain name handling via [tr46].
+- Removes the forceAsFileUrl, forceAsWebUrl and force functions.
+- Behind the scenes: A new table-driven URL parser.
 
 ### Version 2.3.3-dev
 
@@ -207,7 +206,9 @@ Licence
 
 - Code original to this project is MIT licenced, copyright Alwin Blok.
 - The [punycode.js] library is MIT licenced, copyright Mathias Bynens.
+- The [tr46] library is MIT licenced, copyright Sebastian Mayr.
 
 [spec-url]: https://github.com/alwinb/spec-url
 [punycode.js]: https://github.com/mathiasbynens/punycode.js
+[tr46]: https://github.com/jsdom/tr46
 

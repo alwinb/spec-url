@@ -112,7 +112,11 @@ const _decode = input => {
 // Percent Encode Sets
 // -------------------
 
-// Bitflags used as IDs for percent encode sets
+// Bitflags used as IDs for percent encode sets. 
+// This uses a clever embedding of the boolean algebra
+// of finite and cofinite disjoint sets into the boolean
+// algebra of bitvectors, so that bitwise operations 
+// correspond to the boolean operations on character sets.
 
 const sets = {
   c0c1: 1, nl_tab: 2,
@@ -159,6 +163,7 @@ const charInfo // TODO
 
 // NB These are different from my URL Specification,
 // as I'm making changes both here and in the spec.
+// The end result is the same though.
 
 const { c0c1, nl_tab, special:s, quot:q } = sets
 
@@ -176,7 +181,8 @@ const minimal = {
 }
 
 // Minimal Special
-// Likewise, but also encodes "\" before the query.
+// Likewise, but also encodes "\" before the query
+// and "'" in the query.
 
 const minimal_special = {
   user:  nl_tab | sets.user  | s,
