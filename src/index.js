@@ -1,8 +1,9 @@
 import { parseAuth } from './auth.js'
-import { hostType, hostTypes, parseHost, validateOpaqueHost, printHost, domainToASCII, ipv6, ipv4 } from './host.js'
-import { utf8, pct, profiles, specialProfiles, PercentEncoder, encodeSets as sets } from './pct.js'
+import { hostType, hostTypes, parseHost, printHost, validateOpaqueHost, domainToASCII, ipv6, ipv4 } from './host.js'
+import { utf8, pct } from './characters.js'
 const { setPrototypeOf:setProto, assign } = Object
 const log = console.log.bind (console)
+
 
 // URL Core
 // ========
@@ -40,16 +41,18 @@ const opts = {
   nonStrict: 1 << 4, // Rebase and Resolve use non-strict reference transformation
   winDrive:  1 << 5, // Parse windows drive letters
   winSlash:  1 << 6, // Parse \ before query as /
+  specialQuery: 1 << 7, // encode ' in query
   default:   0,
 }
 
 // ### Configurations
 
+const o = opts
 const modes = {
-  file:     opts.hierPart | opts.winSlash | opts.nonStrict | opts.parseHost | opts.plainAuth | opts.winDrive,
-  web:      opts.hierPart | opts.winSlash | opts.nonStrict | opts.parseHost | opts.stealAuth,
-  noscheme: opts.hierPart | opts.winSlash | opts.winDrive,
-  generic:  opts.default,
+  file:     o.hierPart | o.winSlash | o.nonStrict | o.parseHost | o.specialQuery | o.plainAuth | o.winDrive,
+  web:      o.hierPart | o.winSlash | o.nonStrict | o.parseHost | o.specialQuery | o.stealAuth,
+  noscheme: o.hierPart | o.winSlash | o.winDrive,
+  generic:  o.default,
 }
 
 const specialSchemes = {
@@ -233,7 +236,7 @@ function resolve (input, base = {}) {
   if (mode & (opts.parseHost))
     result.host = parseHost (result.host)
 
-  return percentEncodeMut (normaliseMut (result), 'URL')
+  return percentEncodeMut (normaliseMut (result))
 }
 
 
@@ -356,8 +359,8 @@ function normaliseMut (r, coded = true) {
   else if (r.port === defaultPorts [scheme])
     delete r.port
 
-  for (const k in attributeNames)
-    if (r[k] == null) delete r[k]
+  // for (const k in attributeNames)
+  //   if (r[k] == null) delete r[k]
   return r
 }
 
@@ -383,55 +386,47 @@ const isLocalHost = host =>
 // -------------------
 // NB uses punycoding rather than percent coding on domains
 
-const percentEncode = (url, spec = 'WHATWG') =>
-  percentEncodeMut (assign ({}, url), spec)
+const percentEncode = (url, settings={}) =>
+  percentEncodeMut (assign ({}, url), settings)
 
 
-function percentEncodeMut (r, spec = 'WHATWG') {
-  const config = modeFor (r)
-
-  // I am planning to clean this up soon
-  // TODO strictly speaking, IRI must encode more than URL
-  // -- and in addition, URI and IRI should decode unreserved characters
-  // -- and should not contain invalid percent encode sequences
-
-  const unicode = spec in { minimal:1, URL:1, IRI:1 }
-  const encode = new PercentEncoder ({ unicode, incremental:true }) .encode
-  const profile = (config & opts.winSlash) 
-    ? specialProfiles [spec] || specialProfiles.default
-    : profiles [spec] || profiles.default
+function percentEncodeMut (r, settings={}) {
 
   if (r.user != null)
-    r.user = encode (r.user, profile.user)
+    r.user = pct.encodeUserinfo (r.user, settings)
 
   if (r.pass != null)
-    r.pass = encode (r.pass, profile.pass)
+    r.pass = pct.encodeUserinfo (r.pass, settings)
 
   if (r.host != null) {
     const t = hostType (r.host)    
     r.host
       = t === hostTypes.ipv6 ? [...r.host]
       : t === hostTypes.ipv4 ? r.host
-      : t === hostTypes.domain ? (unicode ? [...r.host] : domainToASCII (r.host))
-      : t === hostTypes.opaque ? encode (r.host, profile.host)
+      : t === hostTypes.domain ? (settings.unicode ? [...r.host] : domainToASCII (r.host))
+      : t === hostTypes.opaque ? pct.encodeOpaqueHost (r.host, settings)
       : r.host
   }
 
   // ... opaque paths
-  const seg_esc = hasOpaquePath (r)
-    ? profiles.minimal.dir | sets.c0c1 : profile.dir
+  const encodeSegment = hasOpaquePath (r)
+    ? pct.encodeOpaquePath : pct.encodePathSegment
 
   if (r.dirs)
-    r.dirs = r.dirs.map (x => encode (x, seg_esc))
+    r.dirs = r.dirs.map (x => encodeSegment (x, settings))
 
   if (r.file != null)
-    r.file = encode (r.file, seg_esc)
+    r.file = encodeSegment (r.file, settings)
 
-  if (r.query != null)
-    r.query = encode (r.query, profile.query)
+  if (r.query != null) {
+    const config = modeFor (r)
+    r.query = config & opts.specialQuery
+      ? pct.encodeSpecialQuery (r.query, settings)
+      : pct.encodeQuery (r.query, settings)
+  }
 
   if (r.hash != null)
-    r.hash = encode (r.hash, profile.hash)
+    r.hash = pct.encodeFragment (r.hash, settings)
 
   return r
 }
@@ -704,7 +699,7 @@ function _parse (input, _entry = T.Start, cctable = eqClasses, conf = modes.nosc
           continue outer
         }
         const auth = parseAuth (value)
-        validateOpaqueHost (auth.host)
+        // validateOpaqueHost (auth.host) // done duing percent encode pass
         assign (url, auth)
         entry = T.AfterAuth
         continue outer
@@ -769,8 +764,8 @@ function _parse (input, _entry = T.Start, cctable = eqClasses, conf = modes.nosc
 // Exports
 // =======
 
-const version = '2.4.0-dev'
-const unstable = { utf8, pct, PercentEncoder }
+const version = '2.5.0-dev'
+const unstable = { utf8, pct, percentEncodeMut, normaliseMut }
 
 export {
   version,

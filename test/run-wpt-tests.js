@@ -7,8 +7,12 @@ const log = console.log.bind (console)
 // Parse-resolve-and-normalise
 // ---------------------------
 
+const encodeSettings =
+  { fixup:false, strict:false, incremental:true, unicode:false }
+
 function runTest (test) {
-  const resolved = parseResolve (test.input, test.base)
+  let resolved = parseResolve (test.input, test.base)
+  resolved = url.unstable.percentEncodeMut (resolved, encodeSettings)
   resolved.href = print (resolved)
   return resolved
 }

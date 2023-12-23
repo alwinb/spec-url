@@ -1,4 +1,4 @@
-import { pct } from './pct.js'
+import { pct } from './characters.js'
 import tr46 from 'tr46'
 
 
@@ -135,6 +135,9 @@ const ipv4 = {
 // IPv6 Addresses
 // --------------
 
+// Tokeniser states:
+// { start, hex, decimal }
+
 const _start = 
   /([0-9]+)([.])|([0-9A-Fa-f]+)(:?)|(::)/y
 
@@ -214,8 +217,6 @@ const ipv6 = {
 
 // Domains
 // -------
-
-// TODO last bits of cleanup.
 
 const domainToASCII = domain => {
   const domainString = domain.join ('.')

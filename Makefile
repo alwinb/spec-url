@@ -1,6 +1,6 @@
 .PHONY: all test clean update testclean distclean
 
-files = index.js auth.js host.js pct.js
+files = index.js auth.js host.js characters.js
 sources = $(addprefix src/, $(files))
 
 ## Actions
