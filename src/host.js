@@ -1,7 +1,6 @@
 import { pct } from './characters.js'
 import tr46 from 'tr46'
 
-
 // Host Model
 // ==========
 
@@ -64,7 +63,8 @@ function parseDomain (input, percentCoded = true) {
   if (error)
     throw new Error (`The hostname in //${input} cannot be parsed as a domain name`)
   const address = ipv4.parse (domain)
-  if (address != null) return address
+  if (address != null)
+    return address
   if (domain === '' || _endsInNumber.test (domain))
     throw new Error (`The hostname in //${input} cannot be parsed as a domain name`)
   if (_isDomainString.test (domain)) return domain.split ('.')
@@ -85,12 +85,25 @@ function printHost (host) {
 }
 
 
+// Regex literal
+// whitespace insignificant for readability
+
+const rx = (...args) => {
+  const r = new RegExp (String.raw (...args) .replace (/\s/g, ''), 'y')
+  r.captures = []
+  return r
+}
+
 
 // IPv4 Addresses
 // --------------
 
-const _ip4num =
-  /(?:0[xX]([0-9A-Fa-f]*)|(0[0-7]*)|([1-9][0-9]*))([.]?)/y
+const _ip4num = rx
+  `(?:0[xX]
+    ([0-9A-Fa-f]*) |
+    (0[0-7]*) |
+    ([1-9][0-9]*)
+  )([.])?`
 
 const ipv4 = {
 
@@ -102,7 +115,7 @@ const ipv4 = {
       count++
       const num
         = match[1] != null ? parseInt (match[1]||'0', 16)
-        : match[2] ? parseInt (match[2], 8)
+        : match[2] != null ? parseInt (match[2], 8)
         : parseInt (match[3], 10)
 
       if (_ip4num.lastIndex === input.length) {
@@ -114,7 +127,8 @@ const ipv4 = {
       else {
         if (count === 4 || !match[4]) return null
         err = err || (num > 255)
-        addr = (addr << 8) + num }
+        addr = (addr << 8) + num
+      }
     }
     return null
   },
@@ -131,47 +145,53 @@ const ipv4 = {
 }
 
 
-
 // IPv6 Addresses
 // --------------
 
 // Tokeniser states:
 // { start, hex, decimal }
 
-const _start = 
-  /([0-9]+)([.])|([0-9A-Fa-f]+)(:?)|(::)/y
+const _start = rx
+  ` ([0-9]+)([.])
+  | ([0-9A-Fa-f]+)(:)?
+  | (::)`
 
-const _hex = 
-  /([0-9]+)([.])|([0-9A-Fa-f]+)(:?)|(:)/y
+const _hex = rx
+  ` ([0-9]+)([.])
+  | ([0-9A-Fa-f]+)(:)?
+  | (:)`
 
-const _dec = 
-  /([0-9]+)([.])?/y
+const _dec = rx
+  `([0-9]+)([.])?`
 
 const ipv6 = {
+
   parse (input) {
-    const parts = [], ip4 = []
+    const parts = []
+    const ip4 = []
     let match, compress = null
-    let rx = _start, p = rx.lastIndex = 0
+    let state = _start
+    let p = state.lastIndex = 0
   
-    while (match = rx.exec (input)) {
-      p = rx.lastIndex
+    while (match = state.exec (input)) {
+      p = state.lastIndex
 
-      if (match[1]) {
+      if (match[1]) { // decimal number - ipv4 part
         ip4.push (+match[1])
-        if (!match[2]) break
-        rx = _dec }
+        if (!match[2]) break // ipv4 dot separator `.`
+        state = _dec }
 
-      else if (match[3]) {
+      else if (match[3]) { // hex number - ipv6 part
         parts.push (parseInt (match[3], 16))
-        if (!match[4]) break
-        rx = _hex }
+        if (!match[4]) break // ipv6 separator `:`
+        state = _hex }
 
-      else if (match[5]) {
+      else if (match[5]) { // ipv6 compress `::` or separator `:`
         if (compress == null) compress = parts.length
         else throw new SyntaxError (`Invalid IPv6 address: [${input}]`)
-        rx = _hex }
+        state = _hex }
       
-      rx.lastIndex = p
+      state.lastIndex = p
     }
 
     if (p !== input.length || ip4.length && ip4.length !== 4)
@@ -221,13 +241,24 @@ const ipv6 = {
 const domainToASCII = domain => {
   const domainString = domain.join ('.')
   const ASCIIString = tr46.toASCII (domainString, toASCIIOptions)
-  if (ASCIIString != null)
-    return tr46.toASCII (domainString, toASCIIOptions) .split ('.')
+  if (ASCIIString != null) return ASCIIString.split ('.')
   else log (domain, ASCIIString)
 }
 
-const _isASCIIString =
-  /^[\0-\x7E]*$/
+
+// An alternative option is to piggy-back on the URL constructor
+// so as to avoid having to include the rather large tr46.
+
+function domainToASCII_alt (domain) {
+  if (domain.length === 1 && domain[0] === 'a') return ['a']
+  const str = domain.join ('.')
+  const u = new URL ('http://a')
+  u.hostname = str
+  const r = u.hostname
+  if (r === 'a') throw new Error ('domanToASCII: invalid domain ')
+  else return r
+}
+
 
 const _opaqueHostCodes =
   /^[^\x00\x09\x0A\x0D\x20#/:<>?@[\\\]^|]*$/
