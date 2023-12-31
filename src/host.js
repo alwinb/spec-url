@@ -1,44 +1,229 @@
+const log = console.log.bind (console)
 import { pct } from './characters.js'
 import tr46 from 'tr46'
+
 
 // Host Model
 // ==========
 
-// - IPv6 addresses are parsed to an array of integers
-// - Domains are parsed to an array of domain-label-strings.
-// - IPv4 addresses are parsed to a single integer
-// - Opaque hosts are represented as non-empty strings
-// - Note that the empty *authority* is signified by setting
-//   the *host* property to the empty string.
+// Host := 
+//  IPv6Adddress | DomainName | IPv4Address | String
 
-const types = 
-  { opaque:1, domain:2, ipv4:4, ipv6:6 }
+// The various Host objects are implemented as wrappers around an internal
+// representation value. This internal value is stored under the property
+// with a Symbol-key `valueKey`, abbreviated to $ for convenience.
 
-const hostType = host => host == null ? null :
-  typeof host === 'string' ? types.opaque :
-  typeof host === 'number' ? types.ipv4 :
-  typeof host[0] === 'number' ? types.ipv6 :
-  typeof host[0] === 'string' ? types.domain : null
+const valueKey = Symbol ('$')
+const $ = valueKey
 
+// ### IPv6 Address
 
-// ### Host parsing
+class URLIPv6Address {
+  
+  constructor (input) {
+    this [$] = [0,0,0,0, 0,0,0,0]
 
-const parseHost = (input, percentCoded = true) =>
-  ( input === '' || typeof input !== 'string' ? input
-  : parseDomain (input, percentCoded) )
+    switch (typeof input) {
+      case 'string':
+        return (this[$] = ipv6.parse (input), this)
+      case 'object':
+        if (input && input instanceof URLIPv6Address)
+          return (this[$] = [...input[$]], this)
+      default:
+        throw new Error (`Invalid IPv6 address ${String(input)}`)
+    }
+  }
 
-// The difference with the above is that the host cannot be ''
-const parseWebHost = (input, percentCoded = true) =>
-  ( typeof input !== 'string' ? input
-  : parseDomain (input, percentCoded) )
+  toString () {
+    return `[${ipv6.print (this [$])}]`
+  }
 
-const validateOpaqueHost = (input, percentCoded = true) => {
-  if (_opaqueHostCodes.test (input)) return input
-  else throw new Error (`The hostname in //${input} contains forbidden host codepoints`)
+}
+
+// ### URLDomainName
+
+class URLDomainName {
+  
+  constructor (string) {
+    this[$] = string
+  }
+
+  // TODO methods for mapping it into unicode / ASCII;
+  // what about the percent encoding ? -- that'd be part of the OpaqueHost thing
+  
+  toString () {
+    return this[$]
+  }
+
+}
+
+// ### IPv4 Address
+
+class URLIPv4Address {
+
+  constructor (input) {
+    this [$] = 0
+
+    switch (typeof input) {
+
+      case 'object': if (input && input instanceof URLIPv4Address)
+        return (this[$] = input[$], this)
+
+      case 'string':
+        input = ipv4.parse (input) // fall through
+
+      case 'number':
+        if (input < 0 || input >= 256**4)
+          throw new RangeError (`Invalid IPv4 address: <${input}>`)
+        return (this [$] = input, this)
+
+      default:
+        input = String (input)
+        throw new Error (`Invalid IPv4 address: <${input}>`)
+    }
+  }
+
+  toString () {
+    return ipv4.print (this [$])
+  }
+
 }
 
 
-// NB parseDomain returns a domain **or an ipv4 address**.
+// Host Parsing
+// ------------
+
+function parseHost (input, { parseDomain = false, percentCoded = true } = { }) {
+  return typeof input === 'string' && input.length && input[0] === '['
+    ? new URLIPv6Address (input)
+    : parseDomain && input.length
+    ? parseDomainOrIPv4Address (input, percentCoded)
+    : input
+}
+
+function printHost (h) {
+  return String (h)
+}
+
+function isLocalHost (host) {
+  // REVIEW should this also work with opaque hosts?
+  return (typeof host === 'object' && host && host instanceof URLDomainName
+    && _lc_equiv (host [$], 'localhost'))
+}
+
+function _lc_equiv (s1, s2) {
+  const len = s1.length
+  let r = len === s2.length
+  for (let i=0; r && i<len; i++)
+    r = (s1.charCodeAt(i) | 32) === (s2.charCodeAt(i) | 32)
+  return r
+}
+
+
+// IPv6 Addresses
+// --------------
+
+// Regex literal
+// whitespace insignificant for readability
+
+const rx = (...args) => {
+  const r = new RegExp (String.raw (...args) .replace (/\s/g, ''), 'y')
+  r.captures = []
+  return r
+}
+
+// Tokeniser states:
+// { start, hex, decimal }
+
+const _start = rx
+  ` ([0-9]+)([.])
+  | ([0-9A-Fa-f]+)(:)?
+  | (::)`
+
+const _hex = rx
+  ` ([0-9]+)([.])
+  | ([0-9A-Fa-f]+)(:)?
+  | (:)`
+
+const _dec = rx
+  `([0-9]+)([.])?`
+
+const ipv6 = {
+
+  parse (input) {
+    
+    if ('[' === input[0] && input[input.length-1] === ']')
+      input = input.substring (1, input.length-1)
+
+    const parts = []
+    const ip4 = []
+    let match, compress = null
+    let state = _start
+    let p = state.lastIndex = 0
+  
+    while (match = state.exec (input)) {
+      p = state.lastIndex
+
+      if (match[1]) { // decimal number - ipv4 part
+        ip4.push (+match[1])
+        if (!match[2]) break // ipv4 dot separator `.`
+        state = _dec }
+
+      else if (match[3]) { // hex number - ipv6 part
+        parts.push (parseInt (match[3], 16))
+        if (!match[4]) break // ipv6 separator `:`
+        state = _hex }
+
+      else if (match[5]) { // ipv6 compress `::` or separator `:`
+        if (compress == null) compress = parts.length
+        else throw new SyntaxError (`Invalid IPv6 address: ${input}`)
+        state = _hex }
+      
+      state.lastIndex = p
+    }
+
+    if (p !== input.length || ip4.length && ip4.length !== 4)
+      throw new SyntaxError (`Invalid IPv6 address: ${input}`)
+
+    if (ip4.length) {
+      const [n1, n2, n3, n4] = ip4
+      parts.push (0x100 * n1 + n2, 0x100 * n3 + n4)
+    }
+
+    if (compress == null && parts.length !== 8)
+      throw new SyntaxError (`Invalid IPv6 address: ${input}`)
+
+    const a = [], l = 8 - parts.length
+    for (let i=0; i<l; i++) a.push (0)
+    return (parts.splice (compress, 0, ...a), parts)
+  },
+
+  print (parts) {
+    let [s0, l0] = [0, 0]
+    let [s1, l1] = [0, 0]
+    // Find the longest sequence of zeroes
+    for (let i=0, l=parts.length; i<l; i++) {
+      let num = parts[i]
+      if (num === 0) [s1, l1] = [i, 0]
+      while (num === 0 && i < l)
+        [i, l1, num] = [i+1, l1+1, parts[i+1]]
+      if (l1 > l0)
+        [s0, l0] = [s1, l1]
+    }
+    parts = parts.map (n => n.toString (16))
+    let c = s0 > 0 && s0 + l0 < 8 ? '' : s0 === 0 && l0 === 8 ? '::' : ':'
+    if (l0 > 1) parts.splice (s0, l0, c)
+    return parts.join (':')
+  },
+
+  normalise (input) {
+    return ipv6.print (ipv6.parse (input))
+  }
+}
+
+
+// Domains
+// -------
 
 const toUniodeOptions = {
   checkBidi: true,
@@ -57,41 +242,54 @@ const toASCIIOptions = {
   verifyDNSLength: false // REVIEW
 }
 
-function parseDomain (input, percentCoded = true) {
+const _isDomainString =
+  /^[^\x00-\x20\x7F#%/:<>?@[\\\]^|]+$/
+
+const _endsInNumber =
+  /(^|[.])([0-9]+|0[xX][0-9A-Fa-f]*)[.]?$/
+
+function parseDomainOrIPv4Address (input, percentCoded = true) {
   let r = percentCoded ? pct.decode (input) : input
+
   const { domain, error } = tr46.toUnicode (r, toUniodeOptions)
   if (error)
-    throw new Error (`The hostname in //${input} cannot be parsed as a domain name`)
+    throw new Error (`parseDomainOrIPv4Address: The hostname <${input}> is not a valid encoded domain-name`)
+
   const address = ipv4.parse (domain)
-  if (address != null)
-    return address
-  if (domain === '' || _endsInNumber.test (domain))
-    throw new Error (`The hostname in //${input} cannot be parsed as a domain name`)
-  if (_isDomainString.test (domain)) return domain.split ('.')
-    throw new Error (`The hostname in //${input} cannot be parsed as a domain name`)
+  if (address != null) return new URLIPv4Address (address)
+
+  if (_endsInNumber.test (domain))
+    throw new Error (`parseDomainOrIPv4Address: The last domain-name--label in <${input}> must not be a numeric string`)
+
+  if (_isDomainString.test (domain))
+    return new URLDomainName (domain)
+
+  throw new Error (`parseDomain: The hostname <${input}> cannot be parsed as a domain-name, nor as an IPv4 address`)
 }
 
-
-// ### Printing
-
-function printHost (host) {
-  const typ = hostType (host)
-  const r
-    = typ === types.ipv4 ? ipv4.print (host)
-    : typ === types.ipv6 ? `[${ipv6.print (host)}]`
-    : typ === types.domain ? host.join ('.')
-    : host
-  return r
+function domainToASCII (domain) {
+  const domainString = domain [$]
+  const ASCIIString = tr46.toASCII (domainString, toASCIIOptions)
+  if (ASCIIString != null) return new URLDomainName (ASCIIString)
+  else throw new Error (`domainToASCII: invalid domain ${domain}`)
 }
 
+// An alternative option is to piggy-back on the URL constructor
+// so as to avoid having to include the rather large tr46.
+// The disadvantage of that is that then we lose the ability to print
+// the full unicode version of the domain. 
 
-// Regex literal
-// whitespace insignificant for readability
+function domainToASCII_alt (domain) {
+  const domainString = domain[$]
+  if (domainString.length === 1 && domainString[0] === 'a')
+    return new URLDomainName ('a')
 
-const rx = (...args) => {
-  const r = new RegExp (String.raw (...args) .replace (/\s/g, ''), 'y')
-  r.captures = []
-  return r
+  const u = new URL ('http://a/')
+  u.hostname = domainString
+
+  const ASCIIString = u.hostname
+  if (ASCIIString === 'a') throw new Error (`domainToASCII: invalid domain ${domainString}`)
+  else return new URLDomainName (ASCIIString)
 }
 
 
@@ -99,11 +297,15 @@ const rx = (...args) => {
 // --------------
 
 const _ip4num = rx
-  `(?:0[xX]
-    ([0-9A-Fa-f]*) |
-    (0[0-7]*) |
-    ([1-9][0-9]*)
-  )([.])?`
+  `(?: 0[xX]([0-9A-Fa-f]*)
+     | (0[0-7]*)
+     | ([1-9][0-9]*)
+   )([.])?`
+
+// match[1]: hex
+// match[2]: octal
+// match[3]: decimal
+// match[4]: trailing dot
 
 const ipv4 = {
 
@@ -142,136 +344,15 @@ const ipv4 = {
   normalise (input) {
     return ipv4.print (ipv4.parse (input))
   }
+
 }
-
-
-// IPv6 Addresses
-// --------------
-
-// Tokeniser states:
-// { start, hex, decimal }
-
-const _start = rx
-  ` ([0-9]+)([.])
-  | ([0-9A-Fa-f]+)(:)?
-  | (::)`
-
-const _hex = rx
-  ` ([0-9]+)([.])
-  | ([0-9A-Fa-f]+)(:)?
-  | (:)`
-
-const _dec = rx
-  `([0-9]+)([.])?`
-
-const ipv6 = {
-
-  parse (input) {
-    const parts = []
-    const ip4 = []
-    let match, compress = null
-    let state = _start
-    let p = state.lastIndex = 0
-  
-    while (match = state.exec (input)) {
-      p = state.lastIndex
-
-      if (match[1]) { // decimal number - ipv4 part
-        ip4.push (+match[1])
-        if (!match[2]) break // ipv4 dot separator `.`
-        state = _dec }
-
-      else if (match[3]) { // hex number - ipv6 part
-        parts.push (parseInt (match[3], 16))
-        if (!match[4]) break // ipv6 separator `:`
-        state = _hex }
-
-      else if (match[5]) { // ipv6 compress `::` or separator `:`
-        if (compress == null) compress = parts.length
-        else throw new SyntaxError (`Invalid IPv6 address: [${input}]`)
-        state = _hex }
-      
-      state.lastIndex = p
-    }
-
-    if (p !== input.length || ip4.length && ip4.length !== 4)
-      throw new SyntaxError (`Invalid IPv6 address: [${input}]`)
-
-    if (ip4.length) {
-      const [n1, n2, n3, n4] = ip4
-      parts.push (0x100 * n1 + n2, 0x100 * n3 + n4)
-    }
-
-    if (compress == null && parts.length !== 8)
-      throw new SyntaxError (`Invalid IPv6 address: [${input}]`)
-
-    const a = [], l = 8 - parts.length
-    for (let i=0; i<l; i++) a.push (0)
-    return (parts.splice (compress, 0, ...a), parts)
-  },
-
-  print (parts) {
-    let [s0, l0] = [0, 0]
-    let [s1, l1] = [0, 0]
-    // Find the longest sequence of zeroes
-    for (let i=0, l=parts.length; i<l; i++) {
-      let num = parts[i]
-      if (num === 0) [s1, l1] = [i, 0]
-      while (num === 0 && i < l)
-        [i, l1, num] = [i+1, l1+1, parts[i+1]]
-      if (l1 > l0)
-        [s0, l0] = [s1, l1]
-    }
-    parts = parts.map (n => n.toString (16))
-    let c = s0 > 0 && s0 + l0 < 8 ? '' : s0 === 0 && l0 === 8 ? '::' : ':'
-    if (l0 > 1) parts.splice (s0, l0, c)
-    return parts.join (':')
-  },
-
-  normalise (input) {
-    return ipv6.print (ipv6.parse (input))
-  }
-}
-
-
-
-// Domains
-// -------
-
-const domainToASCII = domain => {
-  const domainString = domain.join ('.')
-  const ASCIIString = tr46.toASCII (domainString, toASCIIOptions)
-  if (ASCIIString != null) return ASCIIString.split ('.')
-  else log (domain, ASCIIString)
-}
-
-
-// An alternative option is to piggy-back on the URL constructor
-// so as to avoid having to include the rather large tr46.
-
-function domainToASCII_alt (domain) {
-  if (domain.length === 1 && domain[0] === 'a') return ['a']
-  const str = domain.join ('.')
-  const u = new URL ('http://a')
-  u.hostname = str
-  const r = u.hostname
-  if (r === 'a') throw new Error ('domanToASCII: invalid domain ')
-  else return r
-}
-
-
-const _opaqueHostCodes =
-  /^[^\x00\x09\x0A\x0D\x20#/:<>?@[\\\]^|]*$/
-
-const _isDomainString =
-  /^[^\x00-\x20\x7F#%/:<>?@[\\\]^|]*$/
-
-const _endsInNumber =
-  /(^|[.])([0-9]+|0[xX][0-9A-Fa-f]*)[.]?$/
-
 
 
 // Exports
 // =======
 
-export { ipv6, ipv4, types as hostTypes, hostType, parseHost, parseWebHost, validateOpaqueHost, printHost, parseDomain, domainToASCII }
+export { 
+  URLIPv6Address, URLDomainName, URLIPv4Address,
+  parseHost, printHost, isLocalHost, 
+  domainToASCII, ipv6, ipv4,
+}

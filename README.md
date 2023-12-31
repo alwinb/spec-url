@@ -12,10 +12,13 @@ This library serves as a reference implementation for this [URL Specification], 
 
 Always feel free to ask questions. If you wish, you may file an issue for a question.
 
-People are encouraged to experiment with creating more high level APIs around this library. One example is my [reurl] library, which wraps around spec-url to provide a high level API for immutable URL objects. 
+* The [URLReference] project is now available! This project provides an **URLReference** class that supports relative URLs whilst maintaining an API that is similar to the WHATWG **URL** class.
+
+* An other alternative is my [reurl] library, which wraps around spec-url to provide an API for working with immutable URL objects. 
+
 
 [URL Specification]: https://alwinb.github.io/url-specification/
-[WHATWG Standard]: https://url.spec.whatwg.org/
+[URLReference]: https://alwinb.github.io/url-reference/
 [WHATWG URL Standard]: https://url.spec.whatwg.org/
 [RFC 3986]: https://tools.ietf.org/html/rfc3986
 [reurl]: https://github.com/alwinb/reurl
@@ -27,8 +30,6 @@ People are encouraged to experiment with creating more high level APIs around th
 API
 ---
 
-The library exposes a concise, low-level API for working with URL strings and URL records. It models URLs as plain javascript objects and it exposes a number of _functions_ for working with them.
-
 ### URL
 
 In this implementation an URL is modeled as a plain JavaScript object with the following _optional_ attributes:
@@ -37,21 +38,21 @@ In this implementation an URL is modeled as a plain JavaScript object with the f
 
 If present, **dirs** is an non-empty array of strings; **host** is a _Host_ (see below) and all other attributes are strings. The string valued attributes are subject to the constraints as described in my [URL Specification].
 
-A _Host_ is either an ipv6 address, a domain, an ipv4 address, or an opaque host. In this implementation these are modeled as an array of numbers, an array of strings, a number, or a string, respectively.
+A _Host_ is either an **URLIPv6Address**, an **URLDomainName**, an **URLIPv4Address**, or an opaque host **string**.
 
 <details>
 <summary>Note</summary>
 
 The [URL Specification] models URLs as [ordered sequences of components][URL Model], "with at most one component per type, except for **dir** componens, of which it may have any amount". Futhermore, the **username**, **password**, **host** and **port** are nested inside an **authority** component.
 
-In this this library URLs are modeled as plain JavaScript objects. The **dir** componens, if present, are collected into a single **dirs** _array_, and the **authority**, if present, is expanded by setting any of its **user**, **pass**, **host** and **port** constituents directly on the url object itself. 
+In this this library URLs are modeled as plain JavaScript objects. The **dir** components, if present, are collected into a single **dirs** _array_, and the **authority**, if present, is expanded by setting any of its **user**, **pass**, **host** and **port** constituents directly on the url object itself. 
 
 There is a one-to-one correspondence between this representation and sequences of components as defined in the URL specification.
 </details>
 
 [URL Model]: https://alwinb.github.io/url-specification/#url-model
 
-### Bsics
+### Basics
 
 * componentTypes — { scheme, auth, drive, root, dir, file, query, hash } — aka. ords
 * ord (url)
@@ -74,16 +75,13 @@ NB this converts the first non-empty path segment of a web-URL to an authority i
   - aka. parseResolve
   - aka. WHATWGResolve
 
-### Normalisation
-
-* normalise (url) — aka. normalize
-* percentEncode (url)
-* percentDecode (url)
-
-### Parsing
+### Options
 
 * modes — { generic, web, file, noscheme }
 * modeFor (url, fallback)
+
+### Parsing
+
 * parse (string [, mode])
 * parsePath (string [, mode])
 * parseAuth (string)
@@ -92,15 +90,20 @@ NB this converts the first non-empty path segment of a web-URL to an authority i
 * parseRebase (string [, base-url-or-string])
 * parseResolve (string [, base-url-or-string])
 
+### Normalisation
+
+* normalise (url) — aka. normalize
+* percentEncode (url)
+* percentDecode (url)
+
 ### Printing
 
 * print (url)
-* printHost (host)
 * pathname (url)
 * filePath (url) — returns a filesystem–path-string
 * unsafePrint (url)
 
-### Host Parsing
+### Host Parsing Internals
 
 * ipv4
   * parse (string)
@@ -115,16 +118,19 @@ NB this converts the first non-empty path segment of a web-URL to an authority i
 Changelog
 ---------
 
-### Forthcoming
+### Version 2.5.0-dev
 
-Work has started on a simple API wrapper.
+- Introduces URLIPv4Address, URLIPv6Address and URLDomainName objects to be used as hosts.
+- The [URLReference] project is now available as well!
+- Uses component character equivalence classes with an action table for percent coding, normalisation and validation. 
+
 
 ### Version 2.4.0-dev
 
-- Exports a parsePath (input [, mode]) function
-- Includes proper IDNA domain name handling via [tr46]
-- Removes the forceAsFileUrl, forceAsWebUrl and force functions
-- Behind the scenes: A new table-driven URL parser
+- Exports a parsePath (input [, mode]) function.
+- Includes proper IDNA domain name handling via [tr46].
+- Removes the forceAsFileUrl, forceAsWebUrl and force functions.
+- Uses a table-driven URL parser, suitable for an algorithmic specification.
 
 ### Version 2.3.3-dev
 
@@ -159,7 +165,7 @@ Towards a simple API without modes; towards loosening the constraints on the mod
 
 - Exports unsafePrint, pathname and filePath functions.
 - Exports parseResolve as an alias for WHATWGParseResolve.
-- Exports an errors (obj) functon to return a list of violated structural constraints, if any.
+- <s>Exports an errors (obj) functon to return a list of violated structural constraints, if any.</s>
 - Catch up with WHATWG changes: C0-control and DEL codepoints are no longer allowed in domains.
 - Prevent reparse bugs for relative URLs that start with  a scheme-like dir or file component.
 - Fix a regression where non-character codepoints were not correctly percent encoded.
