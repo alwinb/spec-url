@@ -284,6 +284,7 @@ const ipv6 = {
       if (match[1]) { // decimal number - ipv4 part
         ip4.push (+match[1])
         if (!match[2]) break // ipv4 dot separator `.`
+        else if (ip4.length === 4) throw new SyntaxError (`Invalid IPv6 address: ${input}`)
         state = _dec }
 
       else if (match[3]) { // hex number - ipv6 part
