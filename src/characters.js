@@ -19,8 +19,8 @@ function* range (a, z = Infinity) { while (a <= z) yield a++ }
 // --|---------- //
 //   | s r w u e // skip, reject, warn, valid-unicode, escape
 
-// The bit patterns used in the categorisation are (so far)
-// merely an implementation detail used in the encoding algorithm.
+// (The bit patterns used in the categorisation are (so far)
+// merely an implementation detail used in the encoding algorithm)
 
 const V = 0b00000
 const E = 0b00001
@@ -45,7 +45,7 @@ oooooooooooooooo\
 pjtfjgjhjjjjjkkc\
 kkkkkkkkkkairire\
 bkkkkkkkkkkkkkkk\
-kkkkkkkkkkkqdqqk\
+kkkkkkkkkkkqdqvk\
 ukkkkkkkkkkkkkkk\
 kkkkkkkkkkksqsko\
 oooooooooooooooo\
@@ -91,11 +91,12 @@ const whatwg = new Uint8Array ([
   I, I, I, I, I, I, I,    // n) HT, LF, CR
   F, F, F, F, F, F, F,    // o) control
   F, R, F, T, F, F, F,    // p) SP
-  F, R, T, T, T, T, T,    // q) [ ] | ^
+  F, R, T, T, T, T, T,    // q) [ ] |
   F, R, F, T, F, F, F,    // r) < >
   F, T, F, T, T, T, T,    // s) { }
   F, T, F, T, F, F, F,    // t) "
   F, T, F, T, T, T, F,    // u) `
+  F, R, F, T, T, T, T,    // v) ^
 // ---------------------------
 //0, 1, 2, 3, 4, 5, 6
 ])
