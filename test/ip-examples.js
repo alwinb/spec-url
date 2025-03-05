@@ -1,4 +1,4 @@
-import { ipv4, ipv6 } from '../src/host.js'
+import { ipv4, ipv6 } from '../src/authority.js'
 import * as assert from 'assert/strict'
 const log = console.log.bind (console)
 
