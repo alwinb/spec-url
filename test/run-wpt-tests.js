@@ -13,7 +13,7 @@ const encodeSettings =
 function runTest (test) {
   let resolved = parseResolve (test.input, test.base)
   resolved = url.unstable.percentEncodeMut (resolved, encodeSettings)
-  resolved.href = print (resolved)
+  resolved.href = print (resolved, { unicode:false })
   return resolved
 }
 

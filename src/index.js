@@ -1,26 +1,17 @@
 import { utf8, pct, _encodeSets as S } from './characters.js'
-import { parse, parsePath, parseAuth, isDottedSegment } from './parser.js'
+import { parse, parsePath, isDottedSegment } from './parser.js'
 
 import {
   URLIPv6Address, URLDomainName, URLIPv4Address,
-  parseHost, printHost, domainToASCII, isLocalHost,
-  ipv6, ipv4
-} from './host.js'
+  parseAuth, parsePort, parseHost, parseDomainOrIPv4Address,
+  printHost, isLocalHost, ipv6, ipv4
+} from './authority.js'
 
 import {
-  options as opts,
-  modes,
-  modeFor,
-  componentTypes,
-  schemesAreEquivalent,
-  isFragmentOnlyURL,
-  ord,
-  upto,
-  pureRebase,
-  normaliseScheme,
-  _attributeNames,
-  _firstNonEmptySegment,
-  _removePrecedingSegments,
+  options as opts, modes, modeFor,
+  componentTypes, ord, upto, pureRebase,
+  schemesAreEquivalent, isFragmentOnlyURL, normaliseScheme,
+  _attributeNames, _firstNonEmptySegment, _removePrecedingSegments,
 } from './model.js'
 
 const { setPrototypeOf:setProto, assign } = Object
@@ -41,9 +32,8 @@ const log = console.log.bind (console)
 // removed. It then continues with the 'strict' behaviour as implemented
 // by the `pureRebase` function.
 
-function rebase (url, base = {}) {
-  if (typeof base === 'string')
-    base = parse (base)
+function rebase (url, base) {
+  base = typeof base === 'string' ? parse (base) : (base ?? { })
 
   if (typeof url === 'string')
     url = parse (url, modeFor (base))
@@ -80,7 +70,7 @@ const hasOpaquePath = url =>
 // Reference Resolution
 // --------------------
 
-function resolve (input, base = {}) {
+function resolve (input, base, _encodeOptions = {}) {
 
   const result =
     rebase (input, base)
@@ -111,11 +101,12 @@ function resolve (input, base = {}) {
     if (result.drive == null) result.root = '/'
   }
 
-  if (mode & (opts.parseDomain)) {
-    result.host = parseHost (result.host, { parseDomain:true })
-  }
+  // Convert opaque host to domain or IPv4 address
+  if (mode & opts.parseDomain && typeof result.host === 'string' && result.host.length)
+    result.host = parseDomainOrIPv4Address (result.host)
 
-  return percentEncodeMut (normaliseMut (result), { fixup:false, strict:false, unicode:false })
+  const { fixup = false, strict = false, unicode = false } = _encodeOptions
+  return percentEncodeMut (normaliseMut (result), { fixup, strict, unicode })
 }
 
 
@@ -196,7 +187,8 @@ function normaliseMut (r, coded = true) {
 
 // Percent Coding URLs
 // -------------------
-// NB uses punycoding rather than percent coding on domains
+// NB: has no effect on URLDomainNames;
+// Doman toASCII is deferred to a serialisation option.
 
 const percentEncode = (url, settings) =>
   percentEncodeMut (assign ({}, url), settings)
@@ -210,9 +202,9 @@ function percentEncodeMut (r, settings) {
     r.pass = pct.encode (r.pass, S.pass, settings)
 
   if (r.host != null) {
-    r.host = typeof r.host === 'string' ? pct.encode (r.host, S.opaqueHost, settings)
-      : (r.host instanceof URLDomainName) && (!(settings?.unicode)) ? domainToASCII (r.host)
-      : r.host // NB assumes host objects are immutable
+    r.host = typeof r.host === 'string'
+      ? pct.encode (r.host, S.opaqueHost, settings)
+      : r.host
   }
 
   // opaque paths vs hierarchical paths
@@ -269,13 +261,13 @@ const isDriveLike =
 //     && 97 <= a && a <= 122
 // }
 
-function print (url, _settings) {
-  const url_ = normaliseForPrinting (url, _settings)
-  return unsafePrint (url_)
+function print (url, options) {
+  const url_ = normaliseForPrinting (url, options)
+  return unsafePrint (url_, options)
 }
 
-function normaliseForPrinting (url, _settings) {
-  url = percentEncode (url, _settings)
+function normaliseForPrinting (url, options) {
+  url = percentEncode (url, options)
 
   // prevent accidentally producing an authority or a path-root
 
@@ -320,7 +312,7 @@ const filePath = ({ drive, root, dirs, file }) =>
 
 // ### Printing prepared URLs
 
-function unsafePrint (url) {
+function unsafePrint (url, options) {
   let result = ''
   const hasCredentials = url.user != null
   for (const k in _attributeNames) if (url[k] != null) {
@@ -329,7 +321,7 @@ function unsafePrint (url) {
       k === 'scheme' ? ( v + ':') :
       k === 'user'   ? ('//' + v) :
       k === 'pass'   ? ( ':' + v) :
-      k === 'host'   ? ((hasCredentials ? '@' : '//') + String (v)) :
+      k === 'host'   ? ((hasCredentials ? '@' : '//') + printHost (v, options)) :
       k === 'port'   ? (':' + v) :
       k === 'drive'  ? ('/' + v) :
       k === 'root'   ? ('/'    ) :

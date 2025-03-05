@@ -1,6 +1,6 @@
 .PHONY: all test clean update testclean distclean
 
-files = index.js model.js parser.js host.js characters.js
+files = index.js model.js parser.js authority.js characters.js
 sources = $(addprefix src/, $(files))
 
 ## Actions

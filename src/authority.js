@@ -1,10 +1,9 @@
-const log = console.log.bind (console)
 import { pct } from './characters.js'
 import tr46 from 'tr46'
+const log = console.log.bind (console)
 
-
-// Host Model
-// ==========
+// Authority and Host Model
+// ========================
 
 // Host := 
 //  IPv6Adddress | DomainName | IPv4Address | String
@@ -28,7 +27,7 @@ class URLIPv6Address {
         return (this[$] = ipv6.parse (input), this)
       case 'object':
         if (input && input instanceof URLIPv6Address)
-          return (this[$] = [...input[$]], this)
+          return (this[$] = Array.from (input[$]), this)
       default:
         throw new Error (`Invalid IPv6 address ${String(input)}`)
     }
@@ -44,13 +43,21 @@ class URLIPv6Address {
 
 class URLDomainName {
   
+  // ASSUMES string is a valid unicode domain string
   constructor (string) {
+    // TODO process/ validate the input
     this[$] = string
   }
 
-  // TODO methods for mapping it into unicode / ASCII;
-  // what about the percent encoding ? -- that'd be part of the OpaqueHost thing
-  
+  // REVIEW should the API for this be mutable instead?
+  // And I suppose we should eh store the repr (unicode/ascii) too
+
+  toASCII () {
+    const ASCIIString = tr46.toASCII (this[$], toASCIIOptions)
+    if (ASCIIString != null) return ASCIIString
+    else throw new Error (`URLDomainName.toASCII: Failed to convert <${this[$]}> to ASCII`)
+  }
+
   toString () {
     return this[$]
   }
@@ -66,27 +73,134 @@ class URLIPv4Address {
 
     switch (typeof input) {
 
-      case 'object': if (input && input instanceof URLIPv4Address)
+      case 'number': if (0 <= input && input <= 0xFF_FF_FF_FF)
+        return (this[$] = input, this)
+      break
+
+      case 'object': if (input !== null && input instanceof URLIPv4Address)
         return (this[$] = input[$], this)
+      break
 
       case 'string':
-        input = ipv4.parse (input) // fall through
-
-      case 'number':
-        if (input < 0 || input >= 256**4)
-          throw new RangeError (`Invalid IPv4 address: <${input}>`)
-        return (this [$] = input, this)
-
-      default:
-        input = String (input)
-        throw new Error (`Invalid IPv4 address: <${input}>`)
+        const value = ipv4.parse (input)
+        if (value !== null) return (this[$] = value, this)
+      break
     }
+
+    throw new Error (`Invalid IPv4 address: <${input}>`)
   }
 
   toString () {
     return ipv4.print (this [$])
   }
 
+}
+
+
+// Authority Parsing
+// -----------------
+
+// (c) The credentials sigil is the last "@" - if any.
+// If it is present then the authority has a username.
+
+// (w) The password sigil is the first ":" before (c).
+// If it is present then the authority has a password.
+
+// (p) The port sigil is the first ":" over-all, or 
+// after (c) if (c) is present. If (p) is present then
+// the authority has a port.
+
+// The algorithm makes a single pass from left to right over the input
+// to find the positions of the sigils. It uses -1 to indicate absence
+// for (c) and (w) and it uses input.length to indicate absence of (p).
+
+// NB This does *not* parse the domain. The host property of
+// the return value is either an ipv6 address or an opaque host string.
+
+function parseAuth (input) {
+  const auth = { }
+  const len = input.length
+  let c = -1, w = -1, p = len
+  let bracks = false
+
+  for (let i=0; i<len; i++) switch (input[i]) {
+
+    case ']':   bracks = false; break
+    case '[':   bracks = true;  break
+    case '@' : (bracks = false, c = i, p = len); break
+    case ':' :
+      if (w < 0) w = i
+      if (!bracks && p >= c) p = i
+  }
+
+  // At this point we have collected the sigil positions
+  // and we can break the input string into separate components.
+
+  const str = input.substring.bind (input)
+
+  if (c >= 0) { // has credentials
+    if (0 <= w && w < c) { // has password
+      auth.user = str (0, w)
+      auth.pass = str (w + 1, c)
+    }
+    else
+      auth.user = str (0, c)
+  }
+
+  auth.host = input[c+1] === '['
+    ? new URLIPv6Address (str(c+1, p))
+    : str(c+1, p)
+
+  if (p < len) try {
+    auth.port = parsePort (str (p + 1))
+  }
+  catch (e) {
+    throw new Error (`Invalid port string in authority //${input}`)
+  }
+
+  // Check structural invariants
+  const errs = authErrors (auth)
+  if (errs) {
+    const message = '\n\t- ' + errs.join ('\n\t- ') + '\n'
+    throw new Error (`Invalid authority //${input} ${message}`)
+  }
+
+  return auth
+}
+
+
+// ### Authority - Structural invariants
+
+function authErrors (auth) {
+  const errs = []
+  const noHost = auth.host == null || auth.host === ''
+
+  if (noHost && auth.port != null)
+    errs.push (`An authority with an empty hostname cannot have a port`)
+
+  if (noHost && (auth.user != null || auth.pass != null))
+    errs.push (`An authority with an empty hostname cannot have credentials`)
+
+  if (auth.pass != null && auth.user == null)
+    errs.push (`An authority without a username cannot have a password`)
+
+  return errs.length ? errs : null
+}
+
+
+
+// ### Port
+
+// A port may either be the empty string, 
+// or the decimal representation of a number n < 2**16.
+
+function parsePort (input) {
+  if (input === '') return input
+  if (/^[0-9]+$/.test (input)) {
+    const port = +input
+    if (input < 2**16) return port
+  }
+  throw new Error (`Invalid port-string: "${input}"`)
 }
 
 
@@ -101,8 +215,9 @@ function parseHost (input, { parseDomain = false, percentCoded = true } = { }) {
     : input
 }
 
-function printHost (h) {
-  return String (h)
+function printHost (h, { unicode = true } = { }) {
+  return h && !unicode && (h instanceof URLDomainName) ?
+    h.toASCII () : String (h)
 }
 
 function isLocalHost (host) {
@@ -152,8 +267,10 @@ const ipv6 = {
 
   parse (input) {
     
-    if ('[' === input[0] && input[input.length-1] === ']')
-      input = input.substring (1, input.length-1)
+    if ('[' === input[0])
+      if (input[input.length-1] === ']')
+        input = input.substring (1, input.length-1)
+      else throw new SyntaxError (`Invalid use of IPv6 address delimiters: ${input}`)
 
     const parts = []
     const ip4 = []
@@ -252,11 +369,9 @@ function parseDomainOrIPv4Address (input, percentCoded = true) {
   let r = percentCoded ? pct.decode (input) : input
 
   const { domain, error } = tr46.toUnicode (r, toUniodeOptions)
-  if (error)
-    throw new Error (`parseDomainOrIPv4Address: The hostname <${input}> is not a valid encoded domain-name`)
+  if (error) throw new Error (`parseDomainOrIPv4Address: The hostname <${input}> is not a valid encoded domain-name`)
 
-  const address = ipv4.parse (domain)
-  if (address != null) return new URLIPv4Address (address)
+  try { return new URLIPv4Address (domain) } catch (e) {}
 
   if (_endsInNumber.test (domain))
     throw new Error (`parseDomainOrIPv4Address: The last domain-name--label in <${input}> must not be a numeric string`)
@@ -267,12 +382,12 @@ function parseDomainOrIPv4Address (input, percentCoded = true) {
   throw new Error (`parseDomain: The hostname <${input}> cannot be parsed as a domain-name, nor as an IPv4 address`)
 }
 
-function domainToASCII (domain) {
-  const domainString = domain [$]
-  const ASCIIString = tr46.toASCII (domainString, toASCIIOptions)
-  if (ASCIIString != null) return new URLDomainName (ASCIIString)
-  else throw new Error (`domainToASCII: invalid domain ${domain}`)
-}
+// function domainToASCII (domain) {
+//   const domainString = domain [$]
+//   const ASCIIString = tr46.toASCII (domainString, toASCIIOptions)
+//   if (ASCIIString != null) return new URLDomainName (ASCIIString)
+//   else throw new Error (`domainToASCII: invalid domain ${domain}`)
+// }
 
 // An alternative option is to piggy-back on the URL constructor
 // so as to avoid having to include the rather large tr46.
@@ -307,6 +422,22 @@ const _ip4num = rx
 // match[3]: decimal
 // match[4]: trailing dot
 
+// This can also be done with a cute state machine.
+// States: (s)tart (z)ero (o)ctal (d)ecimal (x)hex
+// and epsilon/accepting states (Z,O,D,X) to accept
+// them with trailing dot. This does accept 0x and 0x. 
+// which indeed the URL IPv4 Parser does too.
+//
+// s z o d x
+// --========+
+// _ x _ _ _ | xX
+// z o o d x | 0
+// d o o d x | 1-7
+// d _ _ d x | 8-9
+// _ _ _ _ x | A-Fa-f
+// _ Z O D X | .
+
+
 const ipv4 = {
 
   parse (input) {
@@ -316,9 +447,9 @@ const ipv4 = {
     while ((match = _ip4num.exec (input))) {
       count++
       const num
-        = match[1] != null ? parseInt (match[1]||'0', 16)
-        : match[2] != null ? parseInt (match[2], 8)
-        : parseInt (match[3], 10)
+        = match[1] != null ? parseInt (match[1]||'0', 16) // hex
+        : match[2] != null ? parseInt (match[2], 8)       // octal
+        : parseInt (match[3], 10)                         // decimal
 
       if (_ip4num.lastIndex === input.length) {
         const rest = 5 - count
@@ -351,8 +482,10 @@ const ipv4 = {
 // Exports
 // =======
 
-export { 
+export {
+  parseAuth, parsePort,
   URLIPv6Address, URLDomainName, URLIPv4Address,
+  parseDomainOrIPv4Address,
   parseHost, printHost, isLocalHost, 
-  domainToASCII, ipv6, ipv4,
+  ipv6, ipv4,
 }
