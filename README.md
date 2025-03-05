@@ -18,7 +18,7 @@ Always feel free to ask questions. If you wish, you may file an issue for a ques
 
 
 [URL Specification]: https://alwinb.github.io/url-specification/
-[URLReference]: https://alwinb.github.io/url-reference/
+[URLReference]: https://github.com/alwinb/url-reference/
 [WHATWG URL Standard]: https://url.spec.whatwg.org/
 [RFC 3986]: https://tools.ietf.org/html/rfc3986
 [reurl]: https://github.com/alwinb/reurl
