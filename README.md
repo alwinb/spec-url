@@ -1,128 +1,306 @@
+URLReference
+============
 [![NPM badge]][spec-url on NPM]  
 
+_URL or relative reference._  
+The `URLReference` class is designed to overcome shortcomings of the `URL` class.
 
-URL Implementation 
-==================
+#### Reference Implementation
 
-# 🌲
+This project provides an URL manipulation API that supports **relative URLs**
+in a way that is compatible with the [WHATWG URL Standard].
 
-An URL manipulation library that supports URL records, relative URLs, reference resolution and a number of other elementary operations on URLs in a way that is compatible with the [WHATWG URL Standard].
+The project also serves as a reference implementation for a new [URL Specification]. 
+The WHATWG Standard has not been written with the use case of relative
+URLs in mind and it does not provide the necessary infrastructure to add support for it.
+Therefore I have seen no other way forward than to provide a new URL specification that
+rephrases and generalises the WHATWG URL Standard *whilst remaining compatible with it*.
 
-This library serves as a reference implementation for this [URL Specification], which is an alternative URL specification that rephrases and generalises the WHATWG URL Standard to add support for relative URLs, reference resolution and a number of other elementary operations, as wel as restoring a formal grammar. 
+#### Features
 
-Always feel free to ask questions. If you wish, you may file an issue for a question.
+- Supports **Relative** and scheme-less URLs.
+- Supports **Nullable Components**.
+- Distinct **Rebase**, **Normalize** and **Resolve** methods.
+- Resolve is **Behaviourally Equivalent** with the WHATWG URL Standard.
 
-* The [URLReference] project is now available! This project provides an **URLReference** class that supports relative URLs whilst maintaining an API that is similar to the WHATWG **URL** class.
+#### Examples
 
-* An other alternative is my [reurl] library, which wraps around spec-url to provide an API for working with immutable URL objects. 
+```javascript
+new URLReference ('filename.txt#top', '//host') .href
+// => '//host/filename.txt#top'
+
+new URLReference ('?do=something', './path/to/resource?do=nothing') .href
+// => './path/to/resource?do=something'
+
+new URLReference ('take/action.html') .resolve ('http://🌲') .href
+// => 'http://xn--vh8h/take/action.html'
+```
+
+#### Questions
+
+Always feel free to ask questions. If you wish, you may file an issue for a
+question.
 
 
 [URL Specification]: https://alwinb.github.io/url-specification/
-[URLReference]: https://github.com/alwinb/url-reference/
 [WHATWG URL Standard]: https://url.spec.whatwg.org/
 [RFC 3986]: https://tools.ietf.org/html/rfc3986
-[reurl]: https://github.com/alwinb/reurl
-
 [NPM badge]: https://img.shields.io/npm/v/spec-url.svg?sort=semver
 [spec-url on NPM]: https://npmjs.org/package/spec-url
 
 
-API
----
 
-### URL
+API Summary
+-----------
 
-In this implementation an URL is modeled as a plain JavaScript object with the following _optional_ attributes:
+The module exports a single class `URLReference` with **nullable** properties (getters/setters):
 
-* **scheme**, **user**, **pass**, **host**, **port**, **drive**, **root**, **dirs**, **file**, **query**, **hash**
+- `scheme`,
+- `username`, `password`, `hostname`, `port`,
+- `pathname`, `pathroot`, `driveletter`, `filename`,  
+- `query`, `fragment`.
 
-If present, **dirs** is an non-empty array of strings; **host** is a _Host_ (see below) and all other attributes are strings. The string valued attributes are subject to the constraints as described in my [URL Specification].
+It has three key methods:
 
-A _Host_ is either an **URLIPv6Address**, an **URLDomainName**, an **URLIPv4Address**, or an opaque host **string**.
+- `rebase`, `normalize` and `resolve`.
 
-<details>
-<summary>Note</summary>
+It can be converted to an ASCII, or to a Unicode string via:
 
-The [URL Specification] models URLs as [ordered sequences of components][URL Model], "with at most one component per type, except for **dir** componens, of which it may have any amount". Futhermore, the **username**, **password**, **host** and **port** are nested inside an **authority** component.
+- the `href` getter and the `toString` method.
 
-In this this library URLs are modeled as plain JavaScript objects. The **dir** components, if present, are collected into a single **dirs** _array_, and the **authority**, if present, is expanded by setting any of its **user**, **pass**, **host** and **port** constituents directly on the url object itself. 
 
-There is a one-to-one correspondence between this representation and sequences of components as defined in the URL specification.
-</details>
 
-[URL Model]: https://alwinb.github.io/url-specification/#url-model
+URLReference API
+----------------
 
-### Basics
+### Terminology
 
-* componentTypes — { scheme, auth, drive, root, dir, file, query, hash } — aka. ords
-* ord (url)
-* upto (url, ord)
+The WHATWG URL standard uses the phrase "__special URL__" for URLs that have a _special scheme_.
+A scheme is a _special scheme_ if it is equivalent to `http`, `https`, `ws`, `wss`, `ftp` or `file`.
 
-### Rebase and Resolve
+The _path_ of an URL may either be **hierarchical**, or **opaque**:
+An _hierarchical path_ is subdivided into path components, an _opaque path_ is not.
+The path of a "_special_ URL" is always considered to be hierarchical. 
+The path of a non-special URL is opaque unless the URL has an authority or if its path starts with a path-root `/`.
 
-The _rebase_ function is the preferred method for composing URLs. It can be thought of as a _resolve_ function for relative URLs.
-The rebase function does not attempt to parse opaque hosts as a domain, and does not enforce additional requirements on the authority.
+### Constructor
 
-* rebase (url-or-string, base-url-or-string)
-  - aka. goto (base-url-or-string, url-or-string) — (flipped arguments, deprecated)
-  - aka. parseRebase (url-or-string, base-url-or-string)
+- `new URLReference ()`
+- `new URLReference (input)`
+- `new URLReference (input, base)`
 
-The _resolve_ function is similar to _rebase_ but it always produces an absolute URL, or throws an error if it is unable to do so.
-It coerces special URLs to have an authority, and parses their hosts as a domain. It enforces that file URLs do not have a user, pass nor port. 
-NB this converts the first non-empty path segment of a web-URL to an authority if this is needed.
+Constructs a new URLReference object. The result _may_ represent a relative URL. The _resolve_ method can be used to ensure that the result represents an absolute URL.
 
-* resolve (url-or-string [, base-url-or-string])
-  - aka. parseResolve
-  - aka. WHATWGResolve
+Arguments `input` and `base` are optional. Each may be a string to be parsed, or an existing URLReference object. If a `base` argument is supplied, then `input` is *rebased* onto `base` after parsing. 
 
-### Options
+**Parsing behaviour**
 
-* modes — { generic, web, file, noscheme }
-* modeFor (url, fallback)
+The parsing behaviour adapts to the scheme of `input` or the scheme of `base` otherwise:
 
-### Parsing
+* Any `\` code-points before the host and in the path are treated as `/` 
+  if the input has a special scheme or if it has no scheme at all.
 
-* parse (string [, mode])
-* parsePath (string [, mode])
-* parseAuth (string)
-* parseHost (string-or-host)
-* validateOpaqueHost (string)
-* parseRebase (string [, base-url-or-string])
-* parseResolve (string [, base-url-or-string])
+* Windows drive letters are detected if the scheme is equivalent to `file` or if no scheme is present at all. 
+  If no scheme is present and a windows drive letter is detected then then the scheme is implicitly set to `file`.
 
-### Normalisation
+The hostname is always parsed as an opaque hostname string. 
+Parsing and validating a hostname as a domain is done by the resolve method instead.
 
-* normalise (url) — aka. normalize
-* percentEncode (url)
-* percentDecode (url)
 
-### Printing
+**Examples:**
 
-* print (url)
-* pathname (url)
-* filePath (url) — returns a filesystem–path-string
-* unsafePrint (url)
+```javascript
+const r1 = new URLReference ();
+// r.href == '' // The 'empty relative URL'
 
-### Host Parsing Internals
+const r2 = new URLReference ('/big/trees/');
+// r.href == '/big/trees/'
 
-* ipv4
-  * parse (string)
-  * print (number)
-  * normalise (string)
-* ipv6
-  * parse (string)
-  * print (num-array)
-  * normalise (string)
+const r3 = new URLReference ('index.html', '/big/trees/');
+// r.href == '/big/trees/index.html'
+
+const r4 = new URLReference ('README.md', r3);
+// r.href == '/big/trees/README.md'
+```
+
+**Parsing Behaviour Examples:**
+
+```javascript
+const r1 = new URLReference ('\\foo\\bar', 'http:')
+// r1.href == 'http:/foo/bar'
+
+const r2 = new URLReference ('\\foo\\bar', 'ofp:/')
+// r2.href == 'ofp:/\\foo\\bar'
+
+const r3 = new URLReference ('/c:/path/to/file')
+// r3.href == 'file:/c:/path/to/file'
+// r3.hostname == null
+// r3.driveletter == 'c:'
+
+const r4 = new URLReference ('/c:/path/to/file', 'http:')
+// r4.href == 'http:/c:/path/to/file'
+// r4.hostname == null
+// r4.driveletter == null
+
+```
+
+### Rebase
+
+**Rebase** – `uriReference .rebase (base)`
+
+The _base_ argument may be a string or a URLReference object. 
+Rebase returns a new URLReference instance.
+It throws an error if the base argument reprensents an URL with an _opaque path_ (unless _uriReference_ consists of a fragment identifier only, in which case rebase is allowed).
+
+Rebase implements a _slight generalisation_ of [reference transformation][T] as defined
+in RFC3986. In our case the _base_ argument is allowed to be a relative reference, in
+addition to an absolute URL.
+
+* The RFC3986 (URL) standard defines a **strict** and a **non-strict** variant of _reference transformation_. 
+  The _non-strict_ variant ignores the scheme of the input if it is equivalent to the scheme of the base. 
+
+Rebase applies a _non-strict_ reference transformation to URLReferences that have a "_special scheme_"
+and a _strict_ reference transformation in all other cases. This matches the behaviour of the WHATWG URL standard.
+
+[T]: https://www.rfc-editor.org/rfc/rfc3986#section-5.2.2
+[RFC3986]: https://www.rfc-editor.org/rfc/rfc3986
+
+**Example — non-strict behaviour:**
+
+The "non-strict" behaviour for has a surprising consequence:
+An URLReference that has a special scheme may still "behave as a relative URL".
+
+```javascript
+const base = new URLReference ('http://host/dir/')
+const rel = new URLReference ('http:?do=something')
+const rebased = rel.rebase (base)
+// rebased.href == 'http://host/dir/?do=something'
+```
+
+**Example — strict behaviour:**
+
+Rebase applies a "strict" reference transformation to non-special URLReferences. The strict variant does not remove the scheme from the input:
+
+```javascript
+const base = new URLReference ('ofp://host/dir/')
+const abs = new URLReference ('ofp:?do=something')
+const rebased = abs.rebase (base)
+// rebased.href == 'ofp:?do=something'
+```
+
+**Example — opaque path behaviour:**
+
+It is not possible to rebase a relative URLReference on a base that has an _opaque path_. 
+
+```javascript
+const base = new URLReference ('ofp:this/is/an/opaque-path/')
+const rel = new URLReference ('filename.txt')
+// const rebased = rel.rebase (base) // throws:
+// TypeError: Cannot rebase <filename.txt> onto <ofp:this/is/an/opaque-path/>
+
+const base2 = new URLReference ('ofp:/not/an/opaque-path/')
+const rebased = rel.rebase (base2) // This works as expected
+// rebased.href == 'ofp:/not/an/opaque-path/filename.txt'
+```
+
+### Normalize
+
+**Normalize** – `uriReference .normalize ()`
+
+Normalize collapses dotted segments in the path, removes default ports and percent encodes certain code-points. It behaves in the same way as the WHATWG URL constructor, except for the fact that it supports relative URLs. It does not interpret hostnames as a domain, this is done in the resolve method instead. Normalize always returns a new URLReference instance. 
+
+
+### Resolve
+
+**Resolve** 
+
+- `uriReference .resolve ()`
+- `uriReference .resolve (base)`
+
+The optional `base` argument may be a string or an existing URLReference object. 
+Resolve returns a new URLReference that represents an absolute URL.
+It throws an error if this is not possible.
+
+Resolve does additional processing and checks on the authority:
+
+- Asserts that file-URLs and web-URLs have an authority.
+- Asserts that the authority of web-URLs is not empty.
+- Asserts that file-URLs do not have a username, password or port.
+- Parses opaque hostnames of file-URLs and web-URLs as a domain or an IPv4-address.
+
+Resolve uses the same forceful error correcting behaviour as the WHATWG URL constructor.
+
+*Note*: An unpleasant aspect of the WHATWG behaviour is that if the input is a non-file special URL, and the input has no authority, then the first non-empty path component will be coerced to an authority:
+
+```javascript
+const r1 = new URLReference ('http:/foo/bar')
+// r.host == null
+// r.pathname == '/foo/bar'
+
+const r2 = r1.resolve ('http://host/')
+// The scheme of r1 is ignored because it matches the base.
+// Thus the hostname is taken from the base.
+// r2.href == 'http://host/foo/bar'
+
+const r3 = r1.resolve ()
+// r1 does not have an authority, so the first non-empty path
+// component `foo` is coerced into an authority for the result.
+// r1.href == 'http://foo/bar'
+```
+
+
+**String** – `uriReference .toString ()`
+
+Converts the URLReference to a string. This _preserves_ unicode characters in the URL, unlike the `href` getter which ensures that the result consists of ASCII code-points only.
+
+```javascript
+new URLReference ('take/action.html') .resolve ('http://🌲') .toString ()
+// => 'http://🌲/take/action.html'
+
+new URLReference ('take/action.html') .resolve ('http://🌲') .href
+// => 'http://xn--vh8h/take/action.html'
+```
+
+
+### Properties
+
+Access to the components of the URLReference goes through the following getters/setters.
+All properties are nullable, however some invariants are maintained.
+
+- `scheme`
+- `username`
+- `password`
+- `hostname`
+- `port`
+- `pathname`
++ `driveletter`
++ `pathroot`
++ `filename`
+- `query`
+- `fragment`
+
+Property setters may throw an error if using the supplied value would result in an
+invalid or malformed URLReference object.
+
+The properties `driveletter`, `pathroot` and `filename` do not use the idiomatic
+camelCase style. This is is done to remain consistent with existing property
+names of the WHATWG URL class, such as `pathname` and `hostname`.
 
 
 Changelog
 ---------
+
+### Version 3.0.0
+
+- Introduces the URLReference class to be used as the main API.
 
 ### Version 2.5.0-dev
 
 - Introduces URLIPv4Address, URLIPv6Address and URLDomainName objects to be used as hosts.
 - The [URLReference] project is now available as well!
 - Uses component character equivalence classes with an action table for percent coding, normalisation and validation. 
+
+[URLReference]: https://github.com/alwinb/url-reference/
 
 ### Version 2.4.0-dev
 
@@ -189,7 +367,6 @@ Towards a simple API without modes; towards loosening the constraints on the mod
 - The host parser will now raise an error on domains that end in a number.
 - Includes a fix for normalisation of opaque-path-URL that resulted in a difference in behaviour with the WHATWG Standard. 
 - Prevents reparse bugs for scheme-less URLs that start with a scheme-like path component.
-
 
 ### Version 1.4.0
 

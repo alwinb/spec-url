@@ -1,38 +1,24 @@
 const log = console.log.bind (console)
 const { assign } = Object
-const intsInto = (map, i = 0) => new Proxy ({}, { get:($,k) => (map [k] = i, i++) })
-function* range (a, z = Infinity) { while (a <= z) yield a++ }
-
-// Component Characters
-// ====================
 
 // Components are validated and normalised according to their component type.
 // Depending on the component type, code-points may be:
 
-// V = 0 0 0 0 0 // Valid, ASCII
-// E = 0 0 0 0 1 // Valid, escaped
-// U = 0 0 0 1 0 // Valid, unicode
-// T = 0 0 1 0 0 // Invalid
-// F = 0 0 1 1 1 // Invalid, escaped
-// R = 0 1 1 1 1 // Invalid, escaped and/or rejected
-// I = 1 0 1 0 1 // Invalid, escaped and/or skipped
-// --|---------- //
-//   | s r w u e // skip, reject, warn, valid-unicode, escape
+const V = 0b0_0_0_0_0_0 // Valid, ASCII
+const U = 0b0_0_0_0_1_0 // Valid, Unicode
+const E = 0b0_0_0_0_0_1 // Valid, escaped
+const T = 0b0_0_0_1_0_0 // Invalid, tolerated
+const F = 0b0_0_0_1_1_1 // Invalid, escaped
+const R = 0b0_0_1_1_1_1 // Invalid, escaped and/or rejected
+const I = 0b0_1_0_1_0_1 // Invalid, escaped and/or skipped
+// Bit flags|_s_r_w_u_e // skip, reject, warn, valid-unicode, escape
 
 // (The bit patterns used in the categorisation are (so far)
 // merely an implementation detail used in the encoding algorithm)
 
-const V = 0b00000
-const E = 0b00001
-const U = 0b00010
-const T = 0b00100
-const F = 0b00111
-const R = 0b01111
-const I = 0b10101
-
 // Rather than specifying this per individual codepoint, we partition
 // the set of all codepoints into non-overlapping equivalence classes
-// that are subdivisions of gen-delims -- excluding [ and ],
+// that are subdivisions of gen-delims (excluding `[` and `]`),
 // sub-delims, unreserved ASCII, controls, other unicode, and the
 // percent character.
 
@@ -105,13 +91,13 @@ const whatwg = new Uint8Array ([
 // The columns correspond to encode/ action sets:
 
 const encodeSets = {
-  userInfo: 0, user:0, pass:0,
+  userInfo: 0, user: 0, pass: 0,
   opaqueHost: 1, host: 1,
-  pathSegment: 2, dir:2, file:2,
+  pathSegment: 2, dir: 2, file: 2,
   opaquePath: 3,
   query: 4,
   specialQuery: 5,
-  fragment: 6, hash:6,
+  fragment: 6, hash: 6,
 }
 
 const descriptiveNames = [
@@ -136,10 +122,13 @@ const _FailNone = 0
 const _shouldSkip = 0b10000
 
 function percentEncode (value, encodeSet, _options = {}) {
-  if (typeof encodeSet !== 'number') throw new Error ('percentEncode: Invalid encodeSet Id')
-  const { incremental = true, unicode = true, strict = false, fixup = true } = _options
-  
-  const escapeSetting = unicode ? 1 : 0b11
+
+  if (typeof encodeSet !== 'number')
+    throw new Error ('percentEncode: Invalid encodeSet Id')
+
+  const { incremental = true, unicode = true } = _options
+
+  const escapeSetting = _options.unicode ? 1 : 0b11
   const strictnessSetting = _FailSome
 
   const out = []

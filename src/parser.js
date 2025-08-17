@@ -1,19 +1,15 @@
-import { parseAuth } from './authority.js'
-import {
-  options as o,
-  componentTypes,
-  modes, modeFor,
-  low,
-  _firstNonEmptySegment,
-  _removePrecedingSegments,
-} from './model.js'
 
+// URL Parser
+// ==========
+
+import { parseAuth } from './authority.js'
+import { componentTypes, low, options as o, modes, modeFor, _firstNonEmptySegment, _removePrecedingSegments, } from './model.js'
 const { assign } = Object
 const log = console.log.bind (console)
 
 
-// URL Parser
-// ==========
+// DFA Definition
+// --------------
 
 // ## Character Classes
 
@@ -41,31 +37,51 @@ const eqClasses = new Uint8Array ([
 // @   A   B   C   D   E   F   G   H   I   J   K   L   M   N   O
    0,  1,  1,  1,  1,  1,  1,  1,  1 , 1,  1,  1,  1,  1,  1,  1,
 // P   Q   R   S   T   U   V   W   X   Y   Z   [   \   ]   ^   _
-   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  5,  0,  0,  0, 
+   1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  8,  0,  0,  0, 
 // '   a   b   c   d   e   f   g   h   i   j   k   l   m   n   o
    0,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1, 
 // p   q   r   s   t   u   v   w   x   y   z   {   |   }   ~  DEL
    1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0,  0,  0,  0, 0 ])
 
+const cc_slash = 5
 const cc_other = 0
-const cc_count = 9
-
-// Alternative lookup table for parsePath; where ? and # are 
-// not considered to be delimiters:
-
-const pathEqClasses = new Uint8Array(eqClasses)
-pathEqClasses['?'.charCodeAt(0)] = cc_other
-pathEqClasses['#'.charCodeAt(0)] = cc_other
-
-// Non-special URLs do not handle \ as /
-const nonSpecialEqClasses = new Uint8Array(eqClasses)
-nonSpecialEqClasses['\\'.charCodeAt(0)] = CharClass.AmbiSlash //cc_other
-
-const nonSpecialPathEqClasses = new Uint8Array(pathEqClasses)
-nonSpecialEqClasses['\\'.charCodeAt(0)] = CharClass.AmbiSlash //cc_other
 
 
-// ### States and Tokens
+// ## Transition table / DFA
+
+// Colums corresponds to input character classes
+// Rows correspond to input states
+// Cells correspond to output state
+// States are accepting if they are >= min_accepts
+
+const __ = 0
+const min_accepts = 7
+const next_entry = 8
+const cols = 9
+
+
+const dfa = new Uint8Array ([
+//oth alp +-. dig  :  /   ?   #   nxt,
+  __, __, __, __, __, __, __, __, __, // 0: Fail
+  12, 16, 12, 12, 12, 15, 13, 14, __, // 1: Start
+   8,  8,  8,  8,  8, 15, 13, 14, __, // 2: AfterScheme
+  12, 12, 12, 12, 12, 15, 13, 14, __, // 3: AfterSpecialScheme
+  12, 12, 12, 12, 12, 10, 13, 14, __, // 4: AfterAuth
+  12, 12, 12, 12, 12, 11, 13, 14, __, // 5: RelativePath
+  __, __, __, __, __, __, 13, 14, __, // 6: AfterFile
+  __, __, __, __, __, __, __, __,  2, // 7: Scheme
+   8,  8,  8,  8,  8,  8, __, __,  6, // 8: OpaquePath
+   9,  9,  9,  9,  9, __, __, __,  4, // 9: Auth
+  __, __, __, __, __, __, __, __,  5, // 10: Root
+  __, __, __, __, __, __, __, __,  5, // 11: Dir
+  12, 12, 12, 12, 12, 11, __, __,  6, // 12: File
+  13, 13, 13, 13, 13, 13, 13, __, 14, // 13: Query
+  14, 14, 14, 14, 14, 14, 14, 14, __, // 14: Hash // NB does not verify presence of #
+  __, __, __, __, __,  9, __, __,  5, // 15: RootNoAuth
+  12, 16, 16, 16,  7, 11, __, __,  6, // 16: FileSchemeLike
+])
+
+// ### State and Token IDs
 
 const State = {
   Fail: 0,
@@ -76,61 +92,36 @@ const State = {
   RelativePath: 5,
   AfterFile: 6,
   Scheme: 7,
-  Auth: 8,
-  Root: 9,
-  Dir: 10,
-  File: 11,
-  Query: 12,
-  Hash: 13,
-  RootNoAuth: 14,
-  FileSchemeLike: 15,
-  OpaquePath: 16,
+  OpaquePath: 8,
+  Auth: 9,
+  Root:10,
+  Dir: 11,
+  File: 12,
+  Query: 13,
+  Hash: 14,
+  RootNoAuth: 15,
+  FileSchemeLike: 16,
 }
 
-// A state is accepting if state >= min_accepts
-const min_accepts = State.Scheme
-
-// stateNames is a lookup table 
-// from state-id to a human readable name
 const stateNames = []
-for (const k in State)
-  stateNames[State[k]] = k
+for (const k in State) stateNames[State[k]] = k
 
-// Abbreviate states
-const T = State
-const __ = State.Fail
 
-// Transition table / DFA
-// Colums corresponds to input character classes
-// Rows correspond to input states
-// Cells correspond to output state
-// States are accepting if they are >= min_accepts
 
-const dfa = new Uint8Array ([
-//oth alp +-. dig  :  /   ?   #  ambi
-  __, __, __, __, __, __, __, __, __, // 0: Fail
-  11, 15, 11, 11, 11, 14, 12, 13, 11, // 1: Start
-  16, 16, 16, 16, 16, 14, 12, 13, 16, // 2: AfterScheme
-  11, 11, 11, 11, 11, 14, 12, 13, 11, // 3: AfterSpecialScheme
-  11, 11, 11, 11, 11,  9, 12, 13, 11, // 4: AfterAuth
-  11, 11, 11, 11, 11, 10, 12, 13, 11, // 5: RelativePath
-  __, __, __, __, __, __, 12, 13, __, // 6: AfterFile
-  __, __, __, __, __, __, __, __, __, // 7: Scheme
-   8,  8,  8,  8,  8, __, __, __,  8, // 8: Auth
-  __, __, __, __, __, __, __, __, __, // 9: Root
-  __, __, __, __, __, __, __, __, __, // 10: Dir
-  11, 11, 11, 11, 11, 10, __, __, 11, // 11: File
-  12, 12, 12, 12, 12, 12, 12, __, 12, // 12: Query
-  13, 13, 13, 13, 13, 13, 13, 13, 13, // 13: Hash // NB does not verify presence of #
-  __, __, __, __, __,  8, __, __, __, // 14: RootNoAuth
-  11, 15, 15, 15,  7, 10, __, __, 11, // 15: FileSchemeLike
-  16, 16, 16, 16, 16, 16, __, __, 16, // 16: OpaquePath
-])
+// ### Alternative equivalence class tables
+
+// Lookup table for e.g. parsePath where ? and # are 
+// not considered to be delimiters:
+
+const pathEqClasses = new Uint8Array(eqClasses)
+pathEqClasses['?'.charCodeAt(0)] = cc_other
+pathEqClasses['#'.charCodeAt(0)] = cc_other
 
 
 // Parser
 // ------
 
+const T = State
 function _preprocess (input) {
   // preprocess: remove leading and trailing C0-space
   let anchor = 0, end = input.length
@@ -144,14 +135,138 @@ function _preprocess (input) {
 }
 
 function parse (input, conf = modes.noscheme) {
-  const cctable = conf & o.winSlash ? eqClasses : nonSpecialEqClasses
-  return _parse (input, T.Start, cctable, conf)
+  return _parse (input, T.Start, eqClasses, conf)
 }
 
 function parsePath (input, conf = modes.noscheme) {
-  const cctable = conf & o.winSlash ? pathEqClasses : nonSpecialPathEqClasses
-  return _parse (input, T.AfterAuth, cctable, conf)
+  return _parse (input, T.AfterAuth, pathEqClasses, conf)
 }
+
+function readToken (input, anchor, entry, cctable, conf) {
+  let match = T.Fail, end = anchor
+  const length = input.length
+  outer: while (end < length) {
+    inner: for (let state = entry, pos = anchor; state && pos < length;) {
+      // log ('\t', stateNames[state], input[pos])
+      const c = input[pos++] .charCodeAt (0)
+      let cc = c <= 127 ? cctable [c] : cc_other
+      // Remap `\` to `/` or to cc_other depending on conf
+      if (cc === 8) cc = conf & o.winSlash ? cc_slash : cc_other
+      state = dfa [state * cols + cc]
+      if (state >= min_accepts) (match = state, end = pos)
+    }
+    // log (stateNames[entry], '\n',
+    //   [stateNames[match], input.substring (anchor, end)],
+    //   '=>', stateNames[dfa [match * cols + next_entry]])
+    // entry = dfa [match * cols + next_entry]
+    return [match, anchor, end, dfa [match * cols + next_entry]]
+  }
+  return [T.Fail,anchor,anchor,T.Fail]
+}
+
+
+function _parse (input, entry = T.Start, cctable = eqClasses, conf = modes.noscheme) {
+
+  const url = { } // parse result in progress
+  let ctype = T.Fail
+  let anchor = 0, pos = 0 // parser state
+  let segments = 0 // for drive letter detection
+
+  // let nonEmptySegments = 0
+
+  input = _preprocess (input) // REVIEW should this be done higher up?
+
+
+  while ([ctype, anchor, pos, entry] = readToken (input, pos, entry, cctable, conf)) {
+
+    switch (ctype) {
+
+      case T.Scheme:
+        url.scheme = input.substring (anchor, pos-1)
+        conf = modeFor (url)
+        entry = conf & o.winSlash ? T.AfterSpecialScheme : T.AfterScheme
+        continue
+
+      case T.OpaquePath:
+        // url.opaquePath = input.substring (anchor, pos)
+        url.file = input.substring (anchor, pos) // REVIEW!!
+        continue
+
+      case T.Auth: {
+        const value = input.substring (anchor+2, pos)
+        if (conf & o.winDrive && isDriveString (value)) {
+          url.host = ''
+          url.drive = value
+          continue
+        }
+        else {
+          assign (url, parseAuth (value))
+          continue
+        }
+      }
+
+      case T.Root:
+      case T.RootNoAuth:
+        url.root = '/' // input[anchor]
+        continue
+
+      case T.Dir: {
+        const value = input.substring (anchor, pos-1)
+        if (conf & o.winDrive && url.drive == null &&
+          segments === 0 && isDriveString (value)) {
+          delete url.root // to keep the js url dict keys ordered 
+          delete url.dirs
+          url.drive = value
+          url.root = '/'
+        }
+        else {
+          segments++
+          // nonEmptySegments++
+          url.dirs = url.dirs ?? []
+          // NB I would like to warn or reject non-special hierarchical with \
+          url.dirs.push (value)
+        }
+        continue
+      }
+
+      case T.File:
+      case T.FileSchemeLike: {
+        const value = input.substring (anchor, pos)
+        if (isDottedSegment (value)) {
+          url.dirs = url.dirs ?? []
+          url.dirs.push (value)
+        }
+        else if (segments === 0 &&
+          conf & o.winDrive && url.drive == null && isDriveString (value)) {
+          delete url.root
+          url.drive = value
+        }
+        else {
+          segments++
+          // nonEmptySegments++
+          // NB I would like to warn or reject non-special hierarchical with \
+          url.file = value
+        }
+        continue
+      }
+
+      case T.Query:
+        url.query = input.substring (anchor+1, pos)
+        continue
+
+      case T.Hash:
+        url.hash = input.substring (anchor+1, pos)
+        case T.Fail:
+        return url
+
+    }
+  }
+  
+  return url
+}
+
+
+// Helpers
 
 function isDriveString (input) {
   return input.length === 2 &&
@@ -159,125 +274,14 @@ function isDriveString (input) {
     eqClasses[input.charCodeAt(0)] === 1
 }
 
-function isDottedSegment (seg, coded = true) {
-  return seg === '.' ? 1 :
-    seg === '..' ? 2 :
-    coded && seg.length === 3 && low (seg) === '%2e' ? 1 :
-    coded && seg.length <= 6
-      && (low (seg) === '.%2e'
-      || low (seg) === '%2e.'
-      || low (seg) === '%2e%2e') ? 2 : 0
+function isDottedSegment (s) {
+  return s.length < 7 ? (dots [s.toLowerCase ()] ?? 0) : 0
 }
 
-function _parse (input, _entry = T.Start, cctable = eqClasses, conf = modes.noscheme) {
-  input = _preprocess (input) // REVIEW should this be done higher up?
-  let entry = _entry, anchor = 0
-  let match = T.Fail, end = 0
-  const length = input.length
-
-  const url = { }
-  outer: while (end < length) {
-
-    // ccstate and ccmatch are maybe too clever;
-    // it is a trick, to collect all character classes seen in the token in a single int
-    // I plan to use this so that I can err on the use of \ in generic URLs
-
-    let ccstate = 0, ccmatch = 0
-    inner: for (let state = entry, pos = anchor = end; state && pos < length;) {
-      const c = input[pos++] .charCodeAt (0)
-      const cc = c <= 127 ? cctable [c] : cc_other
-      ccstate |= 1 << cc
-      state = dfa [state * cc_count + cc]
-      if (state >= min_accepts) (match = state, end = pos, ccmatch = ccstate)
-    }
-
-    switch (match) {
-      case T.Scheme:
-        url.scheme = input.substring (anchor, end-1)
-        conf = modeFor (url);
-        [cctable, entry] = conf & o.winSlash
-          ? [eqClasses, T.AfterSpecialScheme]
-          : [nonSpecialEqClasses, T.AfterScheme]
-        continue outer
-
-      case T.OpaquePath:
-        // url.opaquePath = input.substring (anchor, end)
-        url.file = input.substring (anchor, end) // REVIEW!!
-        entry = T.AfterFile
-        continue outer;
-
-      case T.Auth: {
-        const value = input.substring (anchor+2, end)
-        if (conf & o.winDrive && isDriveString (value)) {
-          url.host = ''
-          url.drive = value
-          entry = T.AfterAuth
-          continue outer
-        }
-        else {
-          // log ('auth', value, ccInfo(ccmatch))
-          assign (url, parseAuth (value))
-          entry = T.AfterAuth
-          continue outer
-        }
-      }
-
-      case T.Root:
-      case T.RootNoAuth:
-        url.root = '/' // input[anchor]
-        entry = T.RelativePath
-        continue outer
-
-      case T.Dir: {
-        const value = input.substring (anchor, end-1)
-        // TODO I want to be able to reject non-special, hierarchical URLs that contain \
-        // log ('dir', value, ccInfo(ccmatch))
-        url.dirs = url.dirs ?? []
-        url.dirs.push (value)
-        entry = T.RelativePath
-        continue outer
-      }
-
-      case T.File:
-      case T.FileSchemeLike: {
-        const value = input.substring (anchor, end)
-        if (isDottedSegment (value)) {
-          url.dirs = url.dirs ?? []
-          url.dirs.push (value)
-          entry = T.AfterFile
-        }
-        else {
-          // log ('file', value, ccInfo(ccmatch))
-          url.file = value
-          entry = T.AfterFile
-        }
-        continue outer
-      }
-
-      case T.Query:
-        url.query = input.substring (anchor+1, end)
-        entry = T.Hash
-        continue outer
-
-      case T.Hash:
-        url.hash = input.substring (anchor+1, end)
-        break outer
-    }
-  }
-  
-  // Drive letter detection
-  if (url.drive == null && conf & o.winDrive) {
-    const match = _firstNonEmptySegment (url)
-    if (match && isDriveString (match.value)) {
-      _removePrecedingSegments (url, match)
-      url.drive = match.value
-      if (match.ord === componentTypes.file)
-        delete url.root
-      else url.root = '/'
-    }
-  }
-
-  return url
+const dots = {
+  '.': 1, '..': 2,
+  '%2e': 1, '.%2e': 2,
+  '%2e.': 2, '%2e%2e': 2
 }
 
 

@@ -2,4 +2,5 @@ private/
 node_modules/
 dist/
 test/run/
+test/quick.js
 .tm_properties

@@ -50,7 +50,7 @@ class URLDomainName {
   }
 
   // REVIEW should the API for this be mutable instead?
-  // And I suppose we should eh store the repr (unicode/ascii) too
+  // And I suppose we should eh store the repr (unicode/ascii) too?
 
   toASCII () {
     const ASCIIString = tr46.toASCII (this[$], toASCIIOptions)
@@ -218,6 +218,10 @@ function parseHost (input, { parseDomain = false, percentCoded = true } = { }) {
 function printHost (h, { unicode = true } = { }) {
   return h && !unicode && (h instanceof URLDomainName) ?
     h.toASCII () : String (h)
+}
+
+function validateOpaqueHost (input) {
+ return pct.encode (input, S.opaqueHost, { fixup:false, strict:false })
 }
 
 function isLocalHost (host) {
@@ -425,9 +429,10 @@ const _ip4num = rx
 
 // This can also be done with a cute state machine.
 // States: (s)tart (z)ero (o)ctal (d)ecimal (x)hex
-// and epsilon/accepting states (Z,O,D,X) to accept
-// them with trailing dot. This does accept 0x and 0x. 
-// which indeed the URL IPv4 Parser does too.
+// with (z,o,d,x) accepting and with additional epsilon
+// states (Z,O,D,X) to accept them with trailing dot.
+// This does accept 0x and 0x, which indeed the 
+// WHATWG URL IPv4 Parser does too.
 //
 // s z o d x
 // --========+
@@ -484,9 +489,8 @@ const ipv4 = {
 // =======
 
 export {
-  parseAuth, parsePort,
   URLIPv6Address, URLDomainName, URLIPv4Address,
-  parseDomainOrIPv4Address,
-  parseHost, printHost, isLocalHost, 
+  parseAuth, parsePort, parseDomainOrIPv4Address,
+  parseHost, printHost, isLocalHost, validateOpaqueHost,
   ipv6, ipv4,
 }

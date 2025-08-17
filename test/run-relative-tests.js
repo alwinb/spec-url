@@ -1,6 +1,7 @@
-import * as url from '../src/index.js'
+import { URLReference } from '../src/api.js'
 import testData from './testdata.js'
 import Tests from './test-runner.js'
+
 const log = console.log.bind (console)
 
 
@@ -8,22 +9,9 @@ const log = console.log.bind (console)
 // ---------------------------
 
 function runTest (test) {
-
-  // I've adapted the parser to explicitly set a file scheme
-  // if a drive letter is present
-
-  const base = url.parse (test.base ?? '')
-  if (base.drive && !base.scheme) base.scheme = 'file'
-
-  const input = url.parse (test.input, url.modeFor(base))
-  if (input.drive && !input.scheme) input.scheme = 'file'
-  
-  let rebased = url.rebase (input, base)
-  rebased = url.percentEncode (url.normalise (rebased))
-  rebased.href = url.print (rebased)
-  return rebased
+  const ref = new URLReference (test.input, test.base)
+  return ref.normalise ()
 }
-
 
 // Test 
 // ----

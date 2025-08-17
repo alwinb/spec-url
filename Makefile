@@ -1,11 +1,11 @@
 .PHONY: all test clean update testclean distclean
 
-files = index.js model.js parser.js authority.js characters.js
+files = api.js model.js parser.js authority.js characters.js
 sources = $(addprefix src/, $(files))
 
 ## Actions
 
-all: dist/spec-url.min.mjs dist/spec-url.min.js
+all: dist/spec-url.min.mjs dist/spec-url.browser.min.mjs
 
 test: test/run/urltestdata.json
 	@ echo ""
@@ -21,16 +21,17 @@ clean: testclean distclean
 dist/:
 	@ mkdir dist/
 
-dist/spec-url.min.mjs: dist/ $(sources) Makefile
-	@ echo "Making a minified ES module bundle"
-	@ esbuild --bundle --format=esm --minify --keep-names src/index.js > dist/spec-url.min.mjs
-
-dist/spec-url.min.js: dist/ $(sources) Makefile
-	@ echo "Making a minified bundle"
-	@ echo "globalThis.SpecURLModule = import ('./src/index.js')" | esbuild --bundle --format=iife --minify --keep-names > dist/spec-url.min.js
-
 distclean:
 	@ test -d dist/ && echo "Removing dist/" && rm -r dist/ || exit 0
+
+dist/spec-url.min.mjs: dist/ $(sources) Makefile
+	@ echo "Making a minified ES module bundle"
+	@ esbuild --bundle --format=esm --minify --keep-names src/api.js > dist/spec-url.min.mjs
+
+dist/spec-url.browser.min.mjs: dist/ $(sources) Makefile
+	@ echo "Making a minified browser bundle"
+	@ echo "globalThis.SpecURLModule = import ('./src/api.js')" | esbuild --bundle --format=iife --minify --keep-names > dist/spec-url.browser.min.mjs
+
 
 ## Tests
 
